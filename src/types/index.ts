@@ -1,0 +1,84 @@
+import type { RowDataPacket } from "mysql2/promise";
+
+export interface DomainRow extends RowDataPacket {
+  id: number;
+  name: string;
+  cloudflare_zone_id: string | null;
+  cloudflare_routing_enabled: boolean;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface AccountRow extends RowDataPacket {
+  id: number;
+  email_address: string;
+  password_hash: string | null;
+  domain_id: number;
+  is_custom: boolean;
+  session_token: string;
+  cloudflare_rule_id: string | null;
+  ip_address: string | null;
+  expires_at: Date | null;
+  created_at: Date;
+}
+
+export interface EmailRow extends RowDataPacket {
+  id: number;
+  account_id: number;
+  message_id: string;
+  sender: string;
+  sender_name: string | null;
+  recipient: string;
+  subject: string | null;
+  body_text: string | null;
+  body_html: string | null;
+  raw_headers: string | null;
+  is_read: boolean;
+  received_at: Date;
+}
+
+export interface AdminRow extends RowDataPacket {
+  id: number;
+  username: string;
+  password_hash: string;
+  role: "superadmin" | "admin";
+  is_active: boolean;
+  created_at: Date;
+}
+
+export interface SettingRow extends RowDataPacket {
+  id: number;
+  key: string;
+  value: string;
+  updated_at: Date;
+}
+
+export interface CountRow extends RowDataPacket {
+  total: number;
+}
+
+export interface UserPayload {
+  sub: number;
+  email: string;
+  type: "user";
+  [key: string]: unknown;
+}
+
+export interface AdminPayload {
+  sub: number;
+  username: string;
+  role: string;
+  type: "admin";
+  [key: string]: unknown;
+}
+
+export interface Paginated<T> {
+  data: T[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}

@@ -1,0 +1,12 @@
+[install]
+# Configure package install behavior
+registry = "https://registry.npmjs.org"
+auto = "auto"
+
+[run]
+# Enable --watch for development
+shell = "bun"
+
+[test]
+# Test configuration
+timeout = 5000

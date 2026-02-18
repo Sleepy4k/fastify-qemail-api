@@ -1,0 +1,78 @@
+# dependencies (bun install)
+node_modules
+bun.lockb
+
+# output
+out
+dist
+*.tgz
+*.exe
+qemail-api
+
+# code coverage
+coverage
+*.lcov
+
+# logs
+logs
+_.log
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pino-*.log
+lerna-debug.log*
+.pnpm-debug.log*
+report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+.env.*.local
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# IntelliJ based IDEs
+.idea
+
+# Finder (MacOS) folder config
+.DS_Store
+
+# OS files
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.history/
+
+# Testing
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Database
+*.sql.bak
+*.db
+!database/migrations/*.sql
+!database/seeds/*.sql
+
+# Cloudflare
+cloudflare-worker/.wrangler/
+cloudflare-worker/wrangler.toml.backup
+
+# Claude AI
+tmpclaude-*
