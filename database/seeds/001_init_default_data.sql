@@ -1,8 +1,3 @@
--- ═══════════════════════════════════════════════════════════════════
--- DEFAULT DATA
--- ═══════════════════════════════════════════════════════════════════
-
--- Insert default settings
 INSERT INTO
     settings (`key`, value)
 VALUES ('max_emails_per_ip', '10'),
@@ -14,7 +9,6 @@ VALUES ('max_emails_per_ip', '10'),
 ON DUPLICATE KEY UPDATE
     value = VALUES(value);
 
--- Insert default domains (update with your actual domains)
 INSERT INTO
     domains (
         name,
@@ -26,13 +20,11 @@ VALUES ('tempmail.local', NULL, TRUE),
 ON DUPLICATE KEY UPDATE
     name = VALUES(name);
 
--- Insert default admin (username: admin, password: Admin@123456)
--- ⚠️  CHANGE THIS PASSWORD IN PRODUCTION!
 INSERT INTO
     admin_users (username, password_hash, role)
 VALUES (
         'admin',
-        '$argon2id$v=19$m=65536,t=3,p=4$TQBl/SZnG6zJ/pLJGN/F5g$8xKJHxVzGr2z0P+pR3YJb9wQDQxZ3p4VQh5zJYxK7Ks',
+        '$argon2id$v=19$m=65536,t=3,p=4$JMC76kuLaS7xNfwiDhz1mQ$2CE3+r/NhX1UxFcM1oMD7euUXGAhtjKV69ET3EWodIQ',
         'superadmin'
     )
 ON DUPLICATE KEY UPDATE

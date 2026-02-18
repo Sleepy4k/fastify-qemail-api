@@ -1,10 +1,3 @@
--- QEmail Database Schema
--- Fresh, clean, production-ready structure
-
--- ═══════════════════════════════════════════════════════════════════
--- DOMAINS TABLE
--- ═══════════════════════════════════════════════════════════════════
-
 CREATE TABLE IF NOT EXISTS domains (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
@@ -15,10 +8,6 @@ CREATE TABLE IF NOT EXISTS domains (
     INDEX idx_active (is_active),
     INDEX idx_name (name)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
-
--- ═══════════════════════════════════════════════════════════════════
--- ACCOUNTS TABLE
--- ═══════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS accounts (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -37,10 +26,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     INDEX idx_created (created_at),
     INDEX idx_ip (ip_address)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
-
--- ═══════════════════════════════════════════════════════════════════
--- EMAILS TABLE
--- ═══════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS emails (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -64,10 +49,6 @@ CREATE TABLE IF NOT EXISTS emails (
     INDEX idx_account_received (account_id, received_at DESC)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ═══════════════════════════════════════════════════════════════════
--- ADMIN USERS TABLE
--- ═══════════════════════════════════════════════════════════════════
-
 CREATE TABLE IF NOT EXISTS admin_users (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
@@ -79,10 +60,6 @@ CREATE TABLE IF NOT EXISTS admin_users (
     INDEX idx_username (username),
     INDEX idx_active (is_active)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
-
--- ═══════════════════════════════════════════════════════════════════
--- SETTINGS TABLE
--- ═══════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS settings (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
