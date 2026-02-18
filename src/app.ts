@@ -14,6 +14,7 @@ import errorHandler from "./plugins/internal/error-handler.ts";
 import { emailRoutes } from "./modules/email/email.routes.ts";
 import { webhookRoutes } from "./modules/webhook/webhook.routes.ts";
 import { adminRoutes } from "./modules/admin/admin.routes.ts";
+import { logsRoutes } from "./modules/logs/logs.routes.ts";
 
 export async function buildApp() {
   const app = Fastify({
@@ -55,6 +56,7 @@ export async function buildApp() {
   await app.register(emailRoutes, { prefix: "/api/v1/email" });
   await app.register(webhookRoutes, { prefix: "/api/v1/webhook" });
   await app.register(adminRoutes, { prefix: "/api/v1/admin" });
+  await app.register(logsRoutes, { prefix: "/api/v1/admin/logs" });
 
   return app;
 }

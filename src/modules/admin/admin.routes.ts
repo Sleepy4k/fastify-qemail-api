@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { AdminService } from "./admin.service.ts";
 import { AdminController } from "./admin.controller.ts";
+import { LogService } from "../../utils/log-service.ts";
 import {
   AdminLoginBody,
   AdminLoginReply,
@@ -15,8 +16,9 @@ import {
 } from "./admin.schema.ts";
 
 export async function adminRoutes(app: FastifyInstance) {
-  const svc = new AdminService(app.db, app.redis);
-  const ctrl = new AdminController(svc);
+  const svc  = new AdminService(app.db, app.redis);
+  const log  = new LogService(app.db);
+  const ctrl = new AdminController(svc, log);
 
   app.post(
     "/login",

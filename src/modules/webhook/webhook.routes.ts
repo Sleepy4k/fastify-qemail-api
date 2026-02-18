@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { WebhookService } from "./webhook.service.ts";
 import { WebhookController } from "./webhook.controller.ts";
+import { LogService } from "../../utils/log-service.ts";
 import {
   IncomingEmailBody,
   WebhookReply,
@@ -9,8 +10,9 @@ import {
 } from "./webhook.schema.ts";
 
 export async function webhookRoutes(app: FastifyInstance) {
-  const svc = new WebhookService(app.db, app.redis);
-  const ctrl = new WebhookController(svc);
+  const svc  = new WebhookService(app.db, app.redis);
+  const log  = new LogService(app.db);
+  const ctrl = new WebhookController(svc, log);
 
   app.post(
     "/incoming-email",

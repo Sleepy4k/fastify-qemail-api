@@ -1,10 +1,14 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { WebhookService } from "./webhook.service.ts";
+import type { LogService } from "../../utils/log-service.ts";
 import type { IncomingEmailBody, ForwardLookupQuery } from "./webhook.schema.ts";
 import { env } from "../../config/env.ts";
 
 export class WebhookController {
-  constructor(private svc: WebhookService) {}
+  constructor(
+    private svc: WebhookService,
+    private log: LogService,
+  ) {}
 
   private checkSecret(req: FastifyRequest) {
     const secret = req.headers["x-webhook-secret"];
@@ -18,8 +22,37 @@ export class WebhookController {
     _reply: FastifyReply,
   ) {
     this.checkSecret(req);
-    const id = await this.svc.storeEmail(req.body);
-    return { ok: true, id };
+    try {
+      const id = await this.svc.storeEmail(req.body);
+      this.log.log({
+        actor_type: "system",
+        actor_label: "cloudflare-worker",
+        action: "webhook.email_received",
+        resource_type: "email",
+        resource_id: req.body.messageId,
+        meta: {
+          to: req.body.to,
+          from: req.body.from,
+          subject: req.body.subject,
+          stored_id: id,
+        },
+        ip_address: req.ip,
+      });
+      return { ok: true, id };
+    } catch (err: any) {
+      this.log.log({
+        actor_type: "system",
+        actor_label: "cloudflare-worker",
+        action: "webhook.email_received",
+        status: "failure",
+        resource_type: "email",
+        resource_id: req.body.messageId,
+        meta: { to: req.body.to, from: req.body.from },
+        ip_address: req.ip,
+        error: err?.message,
+      });
+      throw err;
+    }
   }
 
   async forwardLookup(

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { EmailService } from "./email.service.ts";
 import { EmailController } from "./email.controller.ts";
+import { LogService } from "../../utils/log-service.ts";
 import {
   GenerateBody,
   GenerateReply,
@@ -15,8 +16,9 @@ import {
 import { Type } from "@sinclair/typebox";
 
 export async function emailRoutes(app: FastifyInstance) {
-  const svc = new EmailService(app.db, app.redis);
-  const ctrl = new EmailController(svc);
+  const svc  = new EmailService(app.db, app.redis);
+  const log  = new LogService(app.db);
+  const ctrl = new EmailController(svc, log);
 
   app.get(
     "/domains",

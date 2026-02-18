@@ -62,6 +62,21 @@ export interface CountRow extends RowDataPacket {
   total: number;
 }
 
+export interface ActivityLogRow extends RowDataPacket {
+  id: number;
+  actor_type: "user" | "admin" | "system";
+  actor_id: number | null;
+  actor_label: string | null;
+  action: string;
+  status: "success" | "failure";
+  resource_type: string | null;
+  resource_id: string | null;
+  meta: Record<string, unknown> | null; // mysql2 auto-parse kolom JSON
+  ip_address: string | null;
+  error: string | null;
+  created_at: Date;
+}
+
 export interface UserPayload {
   sub: number;
   email: string;
