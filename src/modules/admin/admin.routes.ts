@@ -10,6 +10,7 @@ import {
   StatsReply,
   PaginationQuery,
   AccountIdParam,
+  InboxMessageParam,
   UpdateSettingBody,
 } from "./admin.schema.ts";
 
@@ -124,6 +125,19 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       },
       (req, reply) => ctrl.inspectInbox(req as any, reply),
+    );
+
+    secured.get(
+      "/accounts/:accountId/inbox/:messageId",
+      {
+        schema: {
+          tags: ["admin"],
+          summary: "Get inbox message detail",
+          security: [{ bearer: [] }],
+          params: InboxMessageParam,
+        },
+      },
+      (req, reply) => ctrl.getInboxMessage(req as any, reply),
     );
 
     secured.delete(

@@ -8,7 +8,7 @@ interface RedisWithPrefix {
 }
 
 const SETTINGS_CACHE_KEY = "admin:settings";
-const SETTINGS_CACHE_TTL = 300;
+const SETTINGS_CACHE_TTL = 3600;
 
 export class SettingsService {
   constructor(

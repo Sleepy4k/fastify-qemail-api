@@ -59,3 +59,9 @@ export const AccountIdParam = Type.Object({
   accountId: Type.Number(),
 });
 export type AccountIdParam = Static<typeof AccountIdParam>;
+
+export const InboxMessageParam = Type.Object({
+  accountId: Type.Number(),
+  messageId: Type.String(),
+});
+export type InboxMessageParam = Static<typeof InboxMessageParam>;

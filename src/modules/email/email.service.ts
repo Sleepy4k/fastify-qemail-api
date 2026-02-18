@@ -10,6 +10,9 @@ interface RedisWithPrefix {
   del: (key: string) => Promise<number>;
 }
 
+const INBOX_LIST_TTL = 1800;
+const INBOX_MSG_TTL  = 1800;
+
 export class EmailService {
   private settings: SettingsService;
 
@@ -22,6 +25,23 @@ export class EmailService {
 
   getSettings(): SettingsService {
     return this.settings;
+  }
+
+  private inboxListKey(accountId: number, page: number, limit: number) {
+    return `inbox:${accountId}:p${page}:l${limit}`;
+  }
+
+  private inboxMsgKey(accountId: number, messageId: string) {
+    return `inbox:${accountId}:msg:${messageId}`;
+  }
+
+  private inboxVersionKey(accountId: number) {
+    return `inbox:${accountId}:version`;
+  }
+
+  async invalidateInboxCache(accountId: number) {
+    await this.redis.del(this.inboxVersionKey(accountId));
+    await this.redis.del(`admin:inbox:${accountId}:version`);
   }
 
   async getActiveDomains(): Promise<Array<{ id: number; name: string }>> {
@@ -137,6 +157,15 @@ export class EmailService {
   }
 
   async getInbox(accountId: number, page: number, limit: number) {
+    const versionKey = this.inboxVersionKey(accountId);
+    const listKey = this.inboxListKey(accountId, page, limit);
+
+    const version = await this.redis.get(versionKey);
+    if (version) {
+      const cached = await this.redis.get(listKey);
+      if (cached) return JSON.parse(cached);
+    }
+
     const offset = (page - 1) * limit;
 
     const [countRows] = await this.db.query<CountRow[]>(
@@ -151,10 +180,28 @@ export class EmailService {
       [accountId, limit, offset],
     );
 
-    return { data: rows, total, page, limit, pages: Math.ceil(total / limit) };
+    const result = { data: rows, total, page, limit, pages: Math.ceil(total / limit) };
+
+    await this.redis.setEx(versionKey, INBOX_LIST_TTL, "1");
+    await this.redis.setEx(listKey, INBOX_LIST_TTL, JSON.stringify(result));
+
+    return result;
   }
 
   async getMessage(accountId: number, messageId: string) {
+    const msgKey = this.inboxMsgKey(accountId, messageId);
+    const cached = await this.redis.get(msgKey);
+    if (cached) {
+      const msg = JSON.parse(cached);
+      if (!msg.is_read) {
+        await this.db.query("UPDATE emails SET is_read = 1 WHERE account_id = ? AND message_id = ?", [accountId, messageId]);
+        msg.is_read = true;
+        await this.redis.setEx(msgKey, INBOX_MSG_TTL, JSON.stringify(msg));
+        await this.invalidateInboxCache(accountId);
+      }
+      return msg;
+    }
+
     const [rows] = await this.db.query<EmailRow[]>(
       `SELECT id, message_id, sender, sender_name, recipient, subject, body_text, body_html, raw_headers, is_read, received_at
        FROM emails WHERE account_id = ? AND message_id = ?`,
@@ -167,8 +214,11 @@ export class EmailService {
 
     if (!msg.is_read) {
       await this.db.query("UPDATE emails SET is_read = 1 WHERE id = ?", [msg.id]);
+      msg.is_read = true;
+      await this.invalidateInboxCache(accountId);
     }
 
+    await this.redis.setEx(msgKey, INBOX_MSG_TTL, JSON.stringify(msg));
     return msg;
   }
 
@@ -180,6 +230,8 @@ export class EmailService {
     if (result.affectedRows === 0) {
       throw Object.assign(new Error("Message not found"), { statusCode: 404 });
     }
+    await this.redis.del(this.inboxMsgKey(accountId, messageId));
+    await this.invalidateInboxCache(accountId);
   }
 
   async updateForward(sessionToken: string, forwardTo: string | null) {
@@ -192,6 +244,7 @@ export class EmailService {
       throw Object.assign(new Error("Account not found"), { statusCode: 404 });
     }
     await this.db.query("UPDATE accounts SET forward_to = ? WHERE id = ?", [forwardTo, account.id]);
+    await this.invalidateInboxCache(account.id);
   }
 
   async deleteAccount(sessionToken: string) {
@@ -213,5 +266,6 @@ export class EmailService {
     }
 
     await this.db.query("DELETE FROM accounts WHERE id = ?", [account.id]);
+    await this.invalidateInboxCache(account.id);
   }
 }

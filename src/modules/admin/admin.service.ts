@@ -27,6 +27,9 @@ interface RedisWithPrefix {
   del: (key: string) => Promise<number>;
 }
 
+const INBOX_LIST_TTL = 3600;
+const INBOX_MSG_TTL = 3600;
+
 interface DomainListItem {
   id: number;
   name: string;
@@ -353,9 +356,31 @@ export class AdminService {
 
     await this.db.query("DELETE FROM accounts WHERE id = ?", [accountId]);
     await this.invalidateStatsCache();
+    await this.invalidateInboxCache(accountId);
+  }
+
+  private inboxListKey(accountId: number, page: number, limit: number) {
+    return `admin:inbox:${accountId}:p${page}:l${limit}`;
+  }
+
+  private inboxMsgKey(accountId: number, messageId: string) {
+    return `admin:inbox:${accountId}:msg:${messageId}`;
+  }
+
+  async invalidateInboxCache(accountId: number) {
+    await this.redis.del(`admin:inbox:${accountId}:version`);
   }
 
   async inspectInbox(accountId: number, page: number, limit: number) {
+    const versionKey = `admin:inbox:${accountId}:version`;
+    const listKey = this.inboxListKey(accountId, page, limit);
+
+    const version = await this.redis.get(versionKey);
+    if (version) {
+      const cached = await this.redis.get(listKey);
+      if (cached) return JSON.parse(cached);
+    }
+
     const offset = (page - 1) * limit;
 
     const [accountRows] = await this.db.query<
@@ -384,7 +409,7 @@ export class AdminService {
       [accountId, limit, offset],
     );
 
-    return {
+    const result = {
       account: {
         id: account.id,
         email_address: account.email_address,
@@ -405,6 +430,52 @@ export class AdminService {
       limit,
       total_pages: Math.ceil(total / limit),
     };
+
+    await this.redis.setEx(versionKey, INBOX_LIST_TTL, "1");
+    await this.redis.setEx(listKey, INBOX_LIST_TTL, JSON.stringify(result));
+
+    return result;
+  }
+
+  async getInboxMessage(accountId: number, messageId: string) {
+    const msgKey = this.inboxMsgKey(accountId, messageId);
+    const cached = await this.redis.get(msgKey);
+    if (cached) return JSON.parse(cached);
+
+    const [accountRows] = await this.db.query<AccountRow[]>(
+      "SELECT id, email_address FROM accounts WHERE id = ?",
+      [accountId],
+    );
+    if (!accountRows[0]) {
+      throw Object.assign(new Error("Account not found"), { statusCode: 404 });
+    }
+
+    const [rows] = await this.db.query<EmailRow[]>(
+      `SELECT id, message_id, sender, sender_name, recipient, subject, body_text, body_html, raw_headers, is_read, received_at
+       FROM emails WHERE account_id = ? AND message_id = ?`,
+      [accountId, messageId],
+    );
+    const msg = rows[0];
+    if (!msg) {
+      throw Object.assign(new Error("Message not found"), { statusCode: 404 });
+    }
+
+    const result = {
+      id: msg.id,
+      message_id: msg.message_id,
+      sender: msg.sender,
+      sender_name: msg.sender_name,
+      recipient: msg.recipient,
+      subject: msg.subject,
+      body_text: msg.body_text,
+      body_html: msg.body_html,
+      raw_headers: msg.raw_headers ? JSON.parse(msg.raw_headers) : null,
+      is_read: Boolean(msg.is_read),
+      received_at: msg.received_at,
+    };
+
+    await this.redis.setEx(msgKey, INBOX_MSG_TTL, JSON.stringify(result));
+    return result;
   }
 
   async getDomainCfRules(domainId: number) {

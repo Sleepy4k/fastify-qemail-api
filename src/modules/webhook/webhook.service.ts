@@ -54,6 +54,8 @@ export class WebhookService {
     );
 
     await this.redis.del(`inbox:${account.id}`);
+    await this.redis.del(`inbox:${account.id}:version`);
+    await this.redis.del(`admin:inbox:${account.id}:version`);
     return result.insertId;
   }
 }

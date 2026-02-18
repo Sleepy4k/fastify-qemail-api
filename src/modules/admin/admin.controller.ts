@@ -7,6 +7,7 @@ import type {
   DomainIdParam,
   PaginationQuery,
   AccountIdParam,
+  InboxMessageParam,
   UpdateSettingBody,
 } from "./admin.schema.ts";
 import { env } from "../../config/env.ts";
@@ -86,6 +87,13 @@ export class AdminController {
   ) {
     const { page = 1, limit = 20 } = req.query;
     return this.svc.inspectInbox(req.params.accountId, page, limit);
+  }
+
+  async getInboxMessage(
+    req: FastifyRequest<{ Params: InboxMessageParam }>,
+    _reply: FastifyReply,
+  ) {
+    return this.svc.getInboxMessage(req.params.accountId, req.params.messageId);
   }
 
   async deleteAccount(
