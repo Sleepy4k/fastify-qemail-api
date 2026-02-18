@@ -1,0 +1,2 @@
+ALTER TABLE accounts
+  ADD COLUMN forward_to VARCHAR(255) DEFAULT NULL AFTER expires_at;
