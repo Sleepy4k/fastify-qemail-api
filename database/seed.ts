@@ -59,13 +59,13 @@ async function run() {
     console.log(`[seed]   → Running ${file} …`);
 
     try {
-      await conn.execute("START TRANSACTION");
+      await conn.beginTransaction();
       await conn.query(sql);
       await conn.execute("INSERT INTO seed_runs (name) VALUES (?)", [file]);
-      await conn.execute("COMMIT");
+      await conn.commit();
       console.log(`[seed]   ✓ ${file}`);
     } catch (err) {
-      await conn.execute("ROLLBACK");
+      await conn.rollback();
       console.error(`[seed]   ✗ ${file} failed:`);
       console.error(err);
       await conn.end();

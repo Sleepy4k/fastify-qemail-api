@@ -52,13 +52,13 @@ async function run() {
     console.log(`[migrate]   → Running ${file} …`);
 
     try {
-      await conn.execute("START TRANSACTION");
+      await conn.beginTransaction();
       await conn.query(sql);
       await conn.execute("INSERT INTO migrations (name) VALUES (?)", [file]);
-      await conn.execute("COMMIT");
+      await conn.commit();
       console.log(`[migrate]   ✓ ${file}`);
     } catch (err) {
-      await conn.execute("ROLLBACK");
+      await conn.rollback();
       console.error(`[migrate]   ✗ ${file} failed:`);
       console.error(err);
       await conn.end();
