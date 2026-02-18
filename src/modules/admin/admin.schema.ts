@@ -13,14 +13,20 @@ export const AdminLoginReply = Type.Object({
 });
 
 export const CreateDomainBody = Type.Object({
-  name: Type.String(),
+  name: Type.String({ minLength: 3 }),
   cloudflare_zone_id: Type.Optional(Type.String()),
+  cf_api_token: Type.Optional(Type.String()),
+  cf_account_id: Type.Optional(Type.String()),
+  cf_worker_name: Type.Optional(Type.String()),
 });
 export type CreateDomainBody = Static<typeof CreateDomainBody>;
 
 export const UpdateDomainBody = Type.Object({
   is_active: Type.Optional(Type.Boolean()),
-  cloudflare_zone_id: Type.Optional(Type.String()),
+  cloudflare_zone_id: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  cf_api_token: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  cf_account_id: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  cf_worker_name: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 });
 export type UpdateDomainBody = Static<typeof UpdateDomainBody>;
 

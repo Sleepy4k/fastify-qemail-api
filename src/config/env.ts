@@ -26,7 +26,6 @@ export const env = {
   CF_API_TOKEN: process.env["CF_API_TOKEN"] ?? "",
   CF_ACCOUNT_ID: process.env["CF_ACCOUNT_ID"] ?? "",
   CF_WEBHOOK_SECRET: process.env["CF_WEBHOOK_SECRET"] ?? "",
-  // Name of the Cloudflare Worker to route emails through (used when creating address rules)
   CF_WORKER_NAME: process.env["CF_WORKER_NAME"] ?? "qemail-worker",
 
   CORS_ORIGIN: process.env["CORS_ORIGIN"] ?? "http://localhost:5173",

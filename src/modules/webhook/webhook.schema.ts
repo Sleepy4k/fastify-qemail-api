@@ -16,3 +16,12 @@ export const WebhookReply = Type.Object({
   ok: Type.Boolean(),
   id: Type.Optional(Type.Number()),
 });
+
+export const ForwardLookupQuery = Type.Object({
+  to: Type.String(),
+});
+export type ForwardLookupQuery = Static<typeof ForwardLookupQuery>;
+
+export const ForwardLookupReply = Type.Object({
+  forward_to: Type.Union([Type.String(), Type.Null()]),
+});

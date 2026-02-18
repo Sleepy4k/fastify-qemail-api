@@ -6,6 +6,7 @@ export const GenerateBody = Type.Object({
     Type.String({ minLength: 3, maxLength: 30, pattern: "^[a-zA-Z0-9._-]+$" }),
   ),
   password: Type.Optional(Type.String({ minLength: 8, maxLength: 128 })),
+  forward_to: Type.Optional(Type.String({ format: "email" })),
 });
 export type GenerateBody = Static<typeof GenerateBody>;
 
@@ -49,3 +50,8 @@ export const DomainItem = Type.Object({
   id: Type.Number(),
   name: Type.String(),
 });
+
+export const UpdateForwardBody = Type.Object({
+  forward_to: Type.Union([Type.String({ format: "email" }), Type.Null()]),
+});
+export type UpdateForwardBody = Static<typeof UpdateForwardBody>;

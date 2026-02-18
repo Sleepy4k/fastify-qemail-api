@@ -43,12 +43,14 @@ export class AdminController {
     req: FastifyRequest<{ Body: CreateDomainBody }>,
     reply: FastifyReply,
   ) {
-    const id = await this.svc.createDomain(
-      req.body.name,
-      req.body.cloudflare_zone_id,
-    );
+    const { name, cloudflare_zone_id, cf_api_token, cf_account_id, cf_worker_name } = req.body;
+    const id = await this.svc.createDomain(name, cloudflare_zone_id, {
+      cf_api_token,
+      cf_account_id,
+      cf_worker_name,
+    });
     reply.status(201);
-    return { id, name: req.body.name };
+    return { id, name };
   }
 
   async updateDomain(

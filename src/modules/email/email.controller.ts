@@ -6,6 +6,7 @@ import type {
   InboxParams,
   InboxQuery,
   MessageParams,
+  UpdateForwardBody,
 } from "./email.schema.ts";
 import { env } from "../../config/env.ts";
 
@@ -16,17 +17,9 @@ export class EmailController {
     return this.svc.getActiveDomains();
   }
 
-  async generate(
-    req: FastifyRequest<{ Body: GenerateBody }>,
-    reply: FastifyReply,
-  ) {
-    const { domain_id, username, password } = req.body;
-    const result = await this.svc.generate(
-      domain_id,
-      username,
-      password,
-      req.ip,
-    );
+  async generate(req: FastifyRequest<{ Body: GenerateBody }>, reply: FastifyReply) {
+    const { domain_id, username, password, forward_to } = req.body;
+    const result = await this.svc.generate(domain_id, username, password, req.ip, forward_to);
 
     let token = null;
     if (password) {
@@ -61,53 +54,41 @@ export class EmailController {
     req: FastifyRequest<{ Params: InboxParams; Querystring: InboxQuery }>,
     _reply: FastifyReply,
   ) {
-    const account = await this.resolveAccount(req.params.token, req);
+    const account = await this.resolveAccount(req.params.token);
     const page = req.query.page ?? 1;
     const limit = req.query.limit ?? 20;
-
     const result = await this.svc.getInbox(account.id, page, limit);
-    return {
-      data: result.data,
-      meta: {
-        page: result.page,
-        limit: result.limit,
-        total: result.total,
-        pages: result.pages,
-      },
-    };
+    return { data: result.data, meta: { page: result.page, limit: result.limit, total: result.total, pages: result.pages } };
   }
 
-  async message(
-    req: FastifyRequest<{ Params: MessageParams }>,
-    _reply: FastifyReply,
-  ) {
-    const account = await this.resolveAccount(req.params.token, req);
+  async message(req: FastifyRequest<{ Params: MessageParams }>, _reply: FastifyReply) {
+    const account = await this.resolveAccount(req.params.token);
     return this.svc.getMessage(account.id, req.params.messageId);
   }
 
-  async deleteMessage(
-    req: FastifyRequest<{ Params: MessageParams }>,
-    reply: FastifyReply,
-  ) {
-    const account = await this.resolveAccount(req.params.token, req);
+  async deleteMessage(req: FastifyRequest<{ Params: MessageParams }>, reply: FastifyReply) {
+    const account = await this.resolveAccount(req.params.token);
     await this.svc.deleteMessage(account.id, req.params.messageId);
     reply.status(204);
   }
 
-  async deleteAccount(
-    req: FastifyRequest<{ Params: InboxParams }>,
-    reply: FastifyReply,
+  async updateForward(
+    req: FastifyRequest<{ Params: InboxParams; Body: UpdateForwardBody }>,
+    _reply: FastifyReply,
   ) {
+    await this.svc.updateForward(req.params.token, req.body.forward_to);
+    return { ok: true };
+  }
+
+  async deleteAccount(req: FastifyRequest<{ Params: InboxParams }>, reply: FastifyReply) {
     await this.svc.deleteAccount(req.params.token);
     reply.status(204);
   }
 
-  private async resolveAccount(token: string, _req: FastifyRequest) {
+  private async resolveAccount(token: string) {
     const account = await this.svc.getAccountByToken(token);
     if (!account) {
-      throw Object.assign(new Error("Invalid or expired session"), {
-        statusCode: 401,
-      });
+      throw Object.assign(new Error("Invalid or expired session"), { statusCode: 401 });
     }
     return account;
   }

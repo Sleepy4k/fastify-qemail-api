@@ -5,6 +5,9 @@ export interface DomainRow extends RowDataPacket {
   name: string;
   cloudflare_zone_id: string | null;
   cloudflare_routing_enabled: boolean;
+  cf_api_token: string | null;
+  cf_account_id: string | null;
+  cf_worker_name: string | null;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -20,6 +23,7 @@ export interface AccountRow extends RowDataPacket {
   cloudflare_rule_id: string | null;
   ip_address: string | null;
   expires_at: Date | null;
+  forward_to: string | null;
   created_at: Date;
 }
 

@@ -6,7 +6,7 @@ export default fp(
   async function helmetPlugin(app: FastifyInstance) {
     await app.register(helmet, {
       global: true,
-      contentSecurityPolicy: false, // disable for API-only backend
+      contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false,
     });
   },

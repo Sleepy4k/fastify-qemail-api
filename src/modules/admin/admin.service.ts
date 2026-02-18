@@ -9,6 +9,7 @@ import type {
 } from "../../types/index.ts";
 import { verifyPassword } from "../../utils/crypto.ts";
 import {
+  resolveCreds,
   verifyZone,
   enableEmailRouting,
   disableEmailRouting,
@@ -26,13 +27,40 @@ interface RedisWithPrefix {
   del: (key: string) => Promise<number>;
 }
 
+interface DomainListItem {
+  id: number;
+  name: string;
+  cloudflare_zone_id: string | null;
+  cloudflare_routing_enabled: boolean;
+  cf_api_token_set: boolean;
+  cf_account_id: string | null;
+  cf_worker_name: string | null;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+function maskDomain(row: DomainRow): DomainListItem {
+  return {
+    id: row.id,
+    name: row.name,
+    cloudflare_zone_id: row.cloudflare_zone_id,
+    cloudflare_routing_enabled: row.cloudflare_routing_enabled,
+    cf_api_token_set: !!row.cf_api_token,
+    cf_account_id: row.cf_account_id,
+    cf_worker_name: row.cf_worker_name,
+    is_active: row.is_active,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
 export class AdminService {
   constructor(
     private db: Pool,
     private redis: RedisWithPrefix,
   ) {}
 
-  // Helper to invalidate stats cache
   private async invalidateStatsCache() {
     await this.redis.del("admin:stats");
   }
@@ -44,15 +72,11 @@ export class AdminService {
     );
     const admin = rows[0];
     if (!admin)
-      throw Object.assign(new Error("Invalid credentials"), {
-        statusCode: 401,
-      });
+      throw Object.assign(new Error("Invalid credentials"), { statusCode: 401 });
 
     const ok = await verifyPassword(admin.password_hash, password);
     if (!ok)
-      throw Object.assign(new Error("Invalid credentials"), {
-        statusCode: 401,
-      });
+      throw Object.assign(new Error("Invalid credentials"), { statusCode: 401 });
 
     await this.db.query(
       "UPDATE admin_users SET last_login_at = NOW() WHERE id = ?",
@@ -83,67 +107,70 @@ export class AdminService {
     return stats;
   }
 
-  async listDomains() {
+  async listDomains(): Promise<DomainListItem[]> {
     const [rows] = await this.db.query<DomainRow[]>(
       "SELECT * FROM domains ORDER BY created_at DESC",
     );
-    return rows;
+    return rows.map(maskDomain);
   }
 
-  /**
-   * Create a new domain.
-   *
-   * Flow:
-   * 1. Verify zone exists and is active in Cloudflare.
-   * 2. Enable Email Routing on the zone.
-   * 3. Insert into DB.
-   */
-  async createDomain(name: string, zoneId?: string) {
+  async createDomain(
+    name: string,
+    zoneId?: string,
+    cfFields: {
+      cf_api_token?: string | null;
+      cf_account_id?: string | null;
+      cf_worker_name?: string | null;
+    } = {},
+  ) {
     let routingEnabled = false;
 
     if (zoneId) {
-      // Step 1 – verify the zone is active
-      const valid = await verifyZone(zoneId);
+      const creds = resolveCreds(cfFields);
+
+      const valid = await verifyZone(zoneId, creds);
       if (!valid) {
         throw Object.assign(
-          new Error(
-            `Cloudflare zone ${zoneId} is not active or could not be reached`,
-          ),
+          new Error(`Cloudflare zone ${zoneId} is not active or unreachable`),
           { statusCode: 422 },
         );
       }
 
-      // Step 2 – enable email routing on the zone (idempotent)
-      const routing = await enableEmailRouting(zoneId);
+      const routing = await enableEmailRouting(zoneId, creds);
       routingEnabled = routing.enabled ?? false;
     }
 
-    // Step 3 – persist to database
     const [result] = await this.db.query<ResultSetHeader>(
-      "INSERT INTO domains (name, cloudflare_zone_id, cloudflare_routing_enabled) VALUES (?, ?, ?)",
-      [name, zoneId ?? null, routingEnabled],
+      `INSERT INTO domains
+         (name, cloudflare_zone_id, cloudflare_routing_enabled, cf_api_token, cf_account_id, cf_worker_name)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        name,
+        zoneId ?? null,
+        routingEnabled,
+        cfFields.cf_api_token || null,
+        cfFields.cf_account_id || null,
+        cfFields.cf_worker_name || null,
+      ],
     );
 
-    // Invalidate caches
     await this.redis.del("domains:active");
     await this.invalidateStatsCache();
-
     return result.insertId;
   }
 
-  /**
-   * Update domain settings.
-   *
-   * When `is_active` changes and there is a zone ID, we enable/disable the CF
-   * Email Routing feature for that zone accordingly.
-   */
   async updateDomain(
     id: number,
-    data: { is_active?: boolean; cloudflare_zone_id?: string },
+    data: {
+      is_active?: boolean;
+      cloudflare_zone_id?: string | null;
+      cf_api_token?: string | null;
+      cf_account_id?: string | null;
+      cf_worker_name?: string | null;
+    },
   ) {
-    // Fetch current domain so we have the zone ID even when not supplied
     const [domainRows] = await this.db.query<DomainRow[]>(
-      "SELECT cloudflare_zone_id, is_active FROM domains WHERE id = ?",
+      "SELECT * FROM domains WHERE id = ?",
       [id],
     );
     const current = domainRows[0];
@@ -151,99 +178,93 @@ export class AdminService {
       throw Object.assign(new Error("Domain not found"), { statusCode: 404 });
     }
 
-    const zoneId = data.cloudflare_zone_id ?? current.cloudflare_zone_id ?? null;
+    const effectiveCfToken =
+      data.cf_api_token !== undefined ? data.cf_api_token : current.cf_api_token;
+    const effectiveCfAccountId =
+      data.cf_account_id !== undefined ? data.cf_account_id : current.cf_account_id;
 
-    // Sync CF routing enabled/disabled when is_active changes
+    const newCreds = resolveCreds({
+      cf_api_token: effectiveCfToken || null,
+      cf_account_id: effectiveCfAccountId || null,
+    });
+
+    const newZoneId =
+      data.cloudflare_zone_id !== undefined
+        ? data.cloudflare_zone_id
+        : current.cloudflare_zone_id;
+
+    const zoneOrTokenChanged =
+      (data.cloudflare_zone_id !== undefined &&
+        data.cloudflare_zone_id !== current.cloudflare_zone_id) ||
+      (data.cf_api_token !== undefined &&
+        data.cf_api_token !== current.cf_api_token);
+
     let cfRoutingEnabled: boolean | undefined;
-    if (zoneId && data.is_active !== undefined) {
-      if (data.is_active) {
-        const routing = await enableEmailRouting(zoneId);
-        cfRoutingEnabled = routing.enabled;
-      } else {
-        const routing = await disableEmailRouting(zoneId);
-        cfRoutingEnabled = routing.enabled;
-      }
-    }
 
-    // If a new zone ID is supplied, verify and enable routing on it
-    if (data.cloudflare_zone_id && data.cloudflare_zone_id !== current.cloudflare_zone_id) {
-      const valid = await verifyZone(data.cloudflare_zone_id);
-      if (!valid) {
-        throw Object.assign(
-          new Error(
-            `Cloudflare zone ${data.cloudflare_zone_id} is not active or could not be reached`,
-          ),
-          { statusCode: 422 },
-        );
+    if (newZoneId) {
+      if (zoneOrTokenChanged) {
+        const valid = await verifyZone(newZoneId, newCreds);
+        if (!valid) {
+          throw Object.assign(
+            new Error(`Cloudflare zone ${newZoneId} is not active or unreachable`),
+            { statusCode: 422 },
+          );
+        }
+        const routing = await enableEmailRouting(newZoneId, newCreds);
+        cfRoutingEnabled = routing.enabled;
+      } else if (data.is_active !== undefined) {
+        if (data.is_active) {
+          const routing = await enableEmailRouting(newZoneId, newCreds);
+          cfRoutingEnabled = routing.enabled;
+        } else {
+          const routing = await disableEmailRouting(newZoneId, newCreds);
+          cfRoutingEnabled = routing.enabled;
+        }
       }
-      const routing = await enableEmailRouting(data.cloudflare_zone_id);
-      cfRoutingEnabled = routing.enabled;
     }
 
     const sets: string[] = [];
     const vals: unknown[] = [];
 
-    if (data.is_active !== undefined) {
-      sets.push("is_active = ?");
-      vals.push(data.is_active);
-    }
-    if (data.cloudflare_zone_id !== undefined) {
-      sets.push("cloudflare_zone_id = ?");
-      vals.push(data.cloudflare_zone_id);
-    }
-    if (cfRoutingEnabled !== undefined) {
-      sets.push("cloudflare_routing_enabled = ?");
-      vals.push(cfRoutingEnabled);
-    }
+    if (data.is_active !== undefined) { sets.push("is_active = ?"); vals.push(data.is_active); }
+    if (data.cloudflare_zone_id !== undefined) { sets.push("cloudflare_zone_id = ?"); vals.push(data.cloudflare_zone_id || null); }
+    if (data.cf_api_token !== undefined) { sets.push("cf_api_token = ?"); vals.push(data.cf_api_token || null); }
+    if (data.cf_account_id !== undefined) { sets.push("cf_account_id = ?"); vals.push(data.cf_account_id || null); }
+    if (data.cf_worker_name !== undefined) { sets.push("cf_worker_name = ?"); vals.push(data.cf_worker_name || null); }
+    if (cfRoutingEnabled !== undefined) { sets.push("cloudflare_routing_enabled = ?"); vals.push(cfRoutingEnabled); }
 
     if (sets.length === 0) return;
     vals.push(id);
 
-    await this.db.query(
-      `UPDATE domains SET ${sets.join(", ")} WHERE id = ?`,
-      vals,
-    );
-
+    await this.db.query(`UPDATE domains SET ${sets.join(", ")} WHERE id = ?`, vals);
     await this.redis.del("domains:active");
   }
 
-  /**
-   * Delete a domain.
-   *
-   * Flow:
-   * 1. Fetch all accounts for this domain that have a CF rule ID.
-   * 2. Delete each CF routing rule.
-   * 3. Optionally disable email routing on the zone.
-   * 4. Delete from DB (cascade deletes accounts + emails).
-   */
   async deleteDomain(id: number) {
     const [domainRows] = await this.db.query<DomainRow[]>(
-      "SELECT cloudflare_zone_id FROM domains WHERE id = ?",
+      "SELECT * FROM domains WHERE id = ?",
       [id],
     );
     const domain = domainRows[0];
 
     if (domain?.cloudflare_zone_id) {
       const zoneId = domain.cloudflare_zone_id;
+      const creds = resolveCreds(domain);
 
-      // Collect all CF rule IDs for accounts on this domain
       const [accountRows] = await this.db.query<AccountRow[]>(
         "SELECT cloudflare_rule_id FROM accounts WHERE domain_id = ? AND cloudflare_rule_id IS NOT NULL",
         [id],
       );
 
-      // Delete individual address rules (best-effort: log failures, don't abort)
       await Promise.allSettled(
         accountRows
           .filter((a) => a.cloudflare_rule_id)
-          .map((a) => deleteEmailRule(zoneId, a.cloudflare_rule_id!)),
+          .map((a) => deleteEmailRule(zoneId, a.cloudflare_rule_id!, creds)),
       );
 
-      // Disable zone-level email routing
-      await disableEmailRouting(zoneId).catch(() => undefined);
+      await disableEmailRouting(zoneId, creds).catch(() => undefined);
     }
 
-    // Delete from DB (cascades to accounts and emails)
     await this.db.query("DELETE FROM domains WHERE id = ?", [id]);
     await this.redis.del("domains:active");
     await this.invalidateStatsCache();
@@ -267,14 +288,9 @@ export class AdminService {
 
     const [rows] = await this.db.query<RowDataPacket[]>(
       `SELECT
-        a.id,
-        a.email_address,
-        a.domain_id,
-        d.name as domain_name,
-        a.is_custom,
-        a.ip_address,
-        a.expires_at,
-        a.created_at,
+        a.id, a.email_address, a.domain_id,
+        d.name as domain_name, a.is_custom, a.ip_address,
+        a.expires_at, a.created_at,
         (SELECT COUNT(*) FROM emails WHERE account_id = a.id) as email_count
        FROM accounts a
        LEFT JOIN domains d ON a.domain_id = d.id
@@ -303,14 +319,16 @@ export class AdminService {
     };
   }
 
-  /**
-   * Admin-level account deletion: removes the CF routing rule then the DB row.
-   */
   async deleteAccount(accountId: number) {
     const [rows] = await this.db.query<
-      (AccountRow & { cloudflare_zone_id: string | null })[]
+      (AccountRow & {
+        cloudflare_zone_id: string | null;
+        cf_api_token: string | null;
+        cf_account_id: string | null;
+      })[]
     >(
-      `SELECT a.id, a.cloudflare_rule_id, d.cloudflare_zone_id
+      `SELECT a.id, a.cloudflare_rule_id,
+              d.cloudflare_zone_id, d.cf_api_token, d.cf_account_id
        FROM accounts a
        JOIN domains d ON a.domain_id = d.id
        WHERE a.id = ?`,
@@ -322,7 +340,15 @@ export class AdminService {
     }
 
     if (account.cloudflare_rule_id && account.cloudflare_zone_id) {
-      await deleteEmailRule(account.cloudflare_zone_id, account.cloudflare_rule_id);
+      const creds = resolveCreds({
+        cf_api_token: account.cf_api_token,
+        cf_account_id: account.cf_account_id,
+      });
+      await deleteEmailRule(
+        account.cloudflare_zone_id,
+        account.cloudflare_rule_id,
+        creds,
+      );
     }
 
     await this.db.query("DELETE FROM accounts WHERE id = ?", [accountId]);
@@ -381,20 +407,15 @@ export class AdminService {
     };
   }
 
-  /**
-   * Sync: bulk-fetch CF routing rules for a domain and return them
-   * (useful for admin UI to show the CF side of things).
-   */
   async getDomainCfRules(domainId: number) {
     const [domainRows] = await this.db.query<DomainRow[]>(
-      "SELECT cloudflare_zone_id FROM domains WHERE id = ?",
+      "SELECT * FROM domains WHERE id = ?",
       [domainId],
     );
     const domain = domainRows[0];
-    if (!domain?.cloudflare_zone_id) {
-      return [];
-    }
-    return listEmailRules(domain.cloudflare_zone_id);
+    if (!domain?.cloudflare_zone_id) return [];
+    const creds = resolveCreds(domain);
+    return listEmailRules(domain.cloudflare_zone_id, creds);
   }
 
   async getSettings() {
@@ -404,7 +425,6 @@ export class AdminService {
     const [rows] = await this.db.query<SettingRow[]>(
       "SELECT * FROM settings ORDER BY `key`",
     );
-
     await this.redis.setEx("admin:settings", 300, JSON.stringify(rows));
     return rows;
   }

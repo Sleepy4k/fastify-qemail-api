@@ -6,8 +6,8 @@ async function main() {
 
   try {
     await app.listen({ host: env.HOST, port: env.PORT });
-    app.log.info(`🚀 Server listening on http://${env.HOST}:${env.PORT}`);
-    app.log.info(`📚 Swagger docs at http://${env.HOST}:${env.PORT}/docs`);
+    app.log.info(`Server listening on http://${env.HOST}:${env.PORT}`);
+    app.log.info(`Swagger docs at http://${env.HOST}:${env.PORT}/docs`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

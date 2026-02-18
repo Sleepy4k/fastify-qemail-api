@@ -12,17 +12,16 @@ export class WebhookService {
     private redis: RedisWithPrefix,
   ) {}
 
+  async getForwardTarget(to: string): Promise<string | null> {
+    const [rows] = await this.db.query<AccountRow[]>(
+      "SELECT forward_to FROM accounts WHERE email_address = ? AND (expires_at IS NULL OR expires_at > NOW())",
+      [to],
+    );
+    return rows[0]?.forward_to ?? null;
+  }
+
   async storeEmail(payload: IncomingEmailBody): Promise<number> {
-    const {
-      to,
-      from: sender,
-      subject,
-      text,
-      html,
-      headers,
-      messageId,
-      receivedAt,
-    } = payload;
+    const { to, from: sender, subject, text, html, headers, messageId, receivedAt } = payload;
 
     const [rows] = await this.db.query<AccountRow[]>(
       "SELECT id FROM accounts WHERE email_address = ? AND (expires_at IS NULL OR expires_at > NOW())",
@@ -30,9 +29,7 @@ export class WebhookService {
     );
     const account = rows[0];
     if (!account) {
-      throw Object.assign(new Error(`No active account for ${to}`), {
-        statusCode: 404,
-      });
+      throw Object.assign(new Error(`No active account for ${to}`), { statusCode: 404 });
     }
 
     const match = sender.match(/^(.+?)\s*<(.+?)>$/);
@@ -57,7 +54,6 @@ export class WebhookService {
     );
 
     await this.redis.del(`inbox:${account.id}`);
-
     return result.insertId;
   }
 }
