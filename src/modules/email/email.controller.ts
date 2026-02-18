@@ -18,8 +18,13 @@ export class EmailController {
   }
 
   async generate(req: FastifyRequest<{ Body: GenerateBody }>, reply: FastifyReply) {
-    const { domain_id, username, password, forward_to } = req.body;
-    const result = await this.svc.generate(domain_id, username, password, req.ip, forward_to);
+    const registrationEnabled = await this.svc.getSettings().isRegistrationEnabled();
+    if (!registrationEnabled) {
+      throw Object.assign(new Error("Registration is currently disabled"), { statusCode: 403 });
+    }
+
+    const { domain_id, username, password, is_custom, forward_to } = req.body;
+    const result = await this.svc.generate(domain_id, username, password, req.ip, is_custom, forward_to);
 
     let token = null;
     if (password) {

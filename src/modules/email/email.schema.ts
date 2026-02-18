@@ -6,6 +6,7 @@ export const GenerateBody = Type.Object({
     Type.String({ minLength: 3, maxLength: 30, pattern: "^[a-zA-Z0-9._-]+$" }),
   ),
   password: Type.Optional(Type.String({ minLength: 8, maxLength: 128 })),
+  is_custom: Type.Optional(Type.Boolean()),
   forward_to: Type.Optional(Type.String({ format: "email" })),
 });
 export type GenerateBody = Static<typeof GenerateBody>;

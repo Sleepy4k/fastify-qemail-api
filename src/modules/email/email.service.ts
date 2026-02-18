@@ -1,8 +1,8 @@
 import type { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import type { DomainRow, AccountRow, EmailRow, CountRow } from "../../types/index.ts";
 import { hashPassword, verifyPassword, randomUsername, randomToken } from "../../utils/crypto.ts";
-import { env } from "../../config/env.ts";
 import { resolveCreds, resolveWorkerName, createEmailRule, deleteEmailRule } from "../../utils/cloudflare.ts";
+import { SettingsService } from "../../utils/settings.ts";
 
 interface RedisWithPrefix {
   get: (key: string) => Promise<string | null>;
@@ -11,10 +11,18 @@ interface RedisWithPrefix {
 }
 
 export class EmailService {
+  private settings: SettingsService;
+
   constructor(
     private db: Pool,
     private redis: RedisWithPrefix,
-  ) {}
+  ) {
+    this.settings = new SettingsService(db, redis);
+  }
+
+  getSettings(): SettingsService {
+    return this.settings;
+  }
 
   async getActiveDomains(): Promise<Array<{ id: number; name: string }>> {
     const cached = await this.redis.get("domains:active");
@@ -34,13 +42,15 @@ export class EmailService {
     username: string | undefined,
     password: string | undefined,
     ip: string,
+    is_custom: boolean = false,
     forwardTo?: string,
   ) {
+    const maxEmailsPerIp = await this.settings.getMaxEmailsPerIp();
     const [countRows] = await this.db.query<CountRow[]>(
       "SELECT COUNT(*) AS total FROM accounts WHERE ip_address = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)",
       [ip],
     );
-    if ((countRows[0]?.total ?? 0) >= env.MAX_EMAILS_PER_IP) {
+    if ((countRows[0]?.total ?? 0) >= maxEmailsPerIp) {
       throw Object.assign(new Error("Rate limit: too many emails created"), { statusCode: 429 });
     }
 
@@ -78,7 +88,8 @@ export class EmailService {
 
     const passwordHash = password ? await hashPassword(password) : null;
     const sessionToken = randomToken();
-    const expiresAt = new Date(Date.now() + env.EMAIL_EXPIRY_HOURS * 3600_000);
+    const emailExpiryHours = await this.settings.getEmailExpiryHours();
+    const expiresAt = new Date(Date.now() + emailExpiryHours * 3600_000);
 
     let insertId: number;
     try {
@@ -86,7 +97,7 @@ export class EmailService {
         `INSERT INTO accounts
            (email_address, password_hash, domain_id, is_custom, session_token, cloudflare_rule_id, ip_address, expires_at, forward_to)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [email, passwordHash, domainId, !!username, sessionToken, cfRuleId, ip, expiresAt, forwardTo ?? null],
+        [email, passwordHash, domainId, is_custom, sessionToken, cfRuleId, ip, expiresAt, forwardTo ?? null],
       );
       insertId = result.insertId;
     } catch (dbErr) {
