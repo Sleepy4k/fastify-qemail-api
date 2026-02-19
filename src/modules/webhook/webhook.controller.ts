@@ -1,7 +1,10 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { WebhookService } from "./webhook.service.ts";
 import type { LogService } from "../../utils/log-service.ts";
-import type { IncomingEmailBody, ForwardLookupQuery } from "./webhook.schema.ts";
+import type {
+  IncomingEmailBody,
+  ForwardLookupQuery,
+} from "./webhook.schema.ts";
 import { env } from "../../config/env.ts";
 
 export class WebhookController {
@@ -23,39 +26,40 @@ export class WebhookController {
   ) {
     this.checkSecret(req);
 
-    // `to` dan `from` diambil dari header HTTP, fallback ke "unknown"
-    const to   = (req.headers["x-email-to"]   as string | undefined)?.trim() || "unknown";
-    const from = (req.headers["x-email-from"] as string | undefined)?.trim() || "unknown";
+    const to =
+      (req.headers["x-email-to"] as string | undefined)?.trim() || "unknown";
+    const from =
+      (req.headers["x-email-from"] as string | undefined)?.trim() || "unknown";
 
     try {
       const id = await this.svc.storeEmail(req.body, to, from);
       this.log.log({
-        actor_type:    "system",
-        actor_label:   "cloudflare-worker",
-        action:        "webhook.email_received",
+        actor_type: "system",
+        actor_label: "cloudflare-worker",
+        action: "webhook.email_received",
         resource_type: "email",
-        resource_id:   req.body.messageId,
+        resource_id: req.body.messageId,
         meta: {
           to,
           from,
-          subject:              req.body.subject,
-          attachment_count:     req.body.attachments?.length ?? 0,
-          stored_id:            id,
+          subject: req.body.subject,
+          attachment_count: req.body.attachments?.length ?? 0,
+          stored_id: id,
         },
         ip_address: req.ip,
       });
       return { ok: true, id };
     } catch (err: any) {
       this.log.log({
-        actor_type:    "system",
-        actor_label:   "cloudflare-worker",
-        action:        "webhook.email_received",
-        status:        "failure",
+        actor_type: "system",
+        actor_label: "cloudflare-worker",
+        action: "webhook.email_received",
+        status: "failure",
         resource_type: "email",
-        resource_id:   req.body.messageId,
-        meta:          { to, from },
-        ip_address:    req.ip,
-        error:         err?.message,
+        resource_id: req.body.messageId,
+        meta: { to, from },
+        ip_address: req.ip,
+        error: err?.message,
       });
       throw err;
     }

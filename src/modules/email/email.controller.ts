@@ -21,16 +21,28 @@ export class EmailController {
     return this.svc.getActiveDomains();
   }
 
-  async generate(req: FastifyRequest<{ Body: GenerateBody }>, reply: FastifyReply) {
-    const registrationEnabled = await this.svc.getSettings().isRegistrationEnabled();
+  async generate(
+    req: FastifyRequest<{ Body: GenerateBody }>,
+    reply: FastifyReply,
+  ) {
+    const registrationEnabled = await this.svc
+      .getSettings()
+      .isRegistrationEnabled();
     if (!registrationEnabled) {
-      throw Object.assign(new Error("Registration is currently disabled"), { statusCode: 403 });
+      throw Object.assign(new Error("Registration is currently disabled"), {
+        statusCode: 403,
+      });
     }
 
     const { domain_id, username, password, is_custom, forward_to } = req.body;
     try {
       const result = await this.svc.generate(
-        domain_id, username, password, req.ip, is_custom, forward_to,
+        domain_id,
+        username,
+        password,
+        req.ip,
+        is_custom,
+        forward_to,
       );
 
       let token = null;
@@ -47,7 +59,12 @@ export class EmailController {
         action: "email.generate",
         resource_type: "account",
         resource_id: String(result.id),
-        meta: { domain_id, is_custom: !!is_custom, has_password: !!password, has_forward: !!forward_to },
+        meta: {
+          domain_id,
+          is_custom: !!is_custom,
+          has_password: !!password,
+          has_forward: !!forward_to,
+        },
         ip_address: req.ip,
       });
 
@@ -91,7 +108,11 @@ export class EmailController {
         ip_address: req.ip,
       });
 
-      return { token, email: account.email, session_token: account.sessionToken };
+      return {
+        token,
+        email: account.email,
+        session_token: account.sessionToken,
+      };
     } catch (err: any) {
       this.log.log({
         actor_type: "user",
@@ -110,16 +131,24 @@ export class EmailController {
     _reply: FastifyReply,
   ) {
     const account = await this.resolveAccount(req.params.token);
-    const page  = req.query.page  ?? 1;
+    const page = req.query.page ?? 1;
     const limit = req.query.limit ?? 20;
     const result = await this.svc.getInbox(account.id, page, limit);
     return {
       data: result.data,
-      meta: { page: result.page, limit: result.limit, total: result.total, pages: result.pages },
+      meta: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        pages: result.pages,
+      },
     };
   }
 
-  async message(req: FastifyRequest<{ Params: MessageParams }>, _reply: FastifyReply) {
+  async message(
+    req: FastifyRequest<{ Params: MessageParams }>,
+    _reply: FastifyReply,
+  ) {
     const account = await this.resolveAccount(req.params.token);
     const result = await this.svc.getMessage(account.id, req.params.messageId);
     this.log.log({
@@ -134,7 +163,10 @@ export class EmailController {
     return result;
   }
 
-  async deleteMessage(req: FastifyRequest<{ Params: MessageParams }>, reply: FastifyReply) {
+  async deleteMessage(
+    req: FastifyRequest<{ Params: MessageParams }>,
+    reply: FastifyReply,
+  ) {
     const account = await this.resolveAccount(req.params.token);
     try {
       await this.svc.deleteMessage(account.id, req.params.messageId);
@@ -183,7 +215,10 @@ export class EmailController {
     return { ok: true };
   }
 
-  async deleteAccount(req: FastifyRequest<{ Params: InboxParams }>, reply: FastifyReply) {
+  async deleteAccount(
+    req: FastifyRequest<{ Params: InboxParams }>,
+    reply: FastifyReply,
+  ) {
     const account = await this.resolveAccount(req.params.token);
     try {
       await this.svc.deleteAccount(req.params.token);
@@ -216,7 +251,9 @@ export class EmailController {
   private async resolveAccount(token: string) {
     const account = await this.svc.getAccountByToken(token);
     if (!account) {
-      throw Object.assign(new Error("Invalid or expired session"), { statusCode: 401 });
+      throw Object.assign(new Error("Invalid or expired session"), {
+        statusCode: 401,
+      });
     }
     return account;
   }

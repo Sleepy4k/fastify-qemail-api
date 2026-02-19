@@ -17,7 +17,10 @@ import {
   listEmailRules,
   deleteEmailRule,
 } from "../../utils/cloudflare.ts";
-import { deleteAttachmentFiles, attachmentUrl } from "../../utils/attachment-storage.ts";
+import {
+  deleteAttachmentFiles,
+  attachmentUrl,
+} from "../../utils/attachment-storage.ts";
 
 interface RedisWithPrefix {
   get: (key: string) => Promise<string | null>;
@@ -77,11 +80,15 @@ export class AdminService {
     );
     const admin = rows[0];
     if (!admin)
-      throw Object.assign(new Error("Invalid credentials"), { statusCode: 401 });
+      throw Object.assign(new Error("Invalid credentials"), {
+        statusCode: 401,
+      });
 
     const ok = await verifyPassword(admin.password_hash, password);
     if (!ok)
-      throw Object.assign(new Error("Invalid credentials"), { statusCode: 401 });
+      throw Object.assign(new Error("Invalid credentials"), {
+        statusCode: 401,
+      });
 
     await this.db.query(
       "UPDATE admin_users SET last_login_at = NOW() WHERE id = ?",
@@ -184,9 +191,13 @@ export class AdminService {
     }
 
     const effectiveCfToken =
-      data.cf_api_token !== undefined ? data.cf_api_token : current.cf_api_token;
+      data.cf_api_token !== undefined
+        ? data.cf_api_token
+        : current.cf_api_token;
     const effectiveCfAccountId =
-      data.cf_account_id !== undefined ? data.cf_account_id : current.cf_account_id;
+      data.cf_account_id !== undefined
+        ? data.cf_account_id
+        : current.cf_account_id;
 
     const newCreds = resolveCreds({
       cf_api_token: effectiveCfToken || null,
@@ -211,7 +222,9 @@ export class AdminService {
         const valid = await verifyZone(newZoneId, newCreds);
         if (!valid) {
           throw Object.assign(
-            new Error(`Cloudflare zone ${newZoneId} is not active or unreachable`),
+            new Error(
+              `Cloudflare zone ${newZoneId} is not active or unreachable`,
+            ),
             { statusCode: 422 },
           );
         }
@@ -231,17 +244,38 @@ export class AdminService {
     const sets: string[] = [];
     const vals: unknown[] = [];
 
-    if (data.is_active !== undefined) { sets.push("is_active = ?"); vals.push(data.is_active); }
-    if (data.cloudflare_zone_id !== undefined) { sets.push("cloudflare_zone_id = ?"); vals.push(data.cloudflare_zone_id || null); }
-    if (data.cf_api_token !== undefined) { sets.push("cf_api_token = ?"); vals.push(data.cf_api_token || null); }
-    if (data.cf_account_id !== undefined) { sets.push("cf_account_id = ?"); vals.push(data.cf_account_id || null); }
-    if (data.cf_worker_name !== undefined) { sets.push("cf_worker_name = ?"); vals.push(data.cf_worker_name || null); }
-    if (cfRoutingEnabled !== undefined) { sets.push("cloudflare_routing_enabled = ?"); vals.push(cfRoutingEnabled); }
+    if (data.is_active !== undefined) {
+      sets.push("is_active = ?");
+      vals.push(data.is_active);
+    }
+    if (data.cloudflare_zone_id !== undefined) {
+      sets.push("cloudflare_zone_id = ?");
+      vals.push(data.cloudflare_zone_id || null);
+    }
+    if (data.cf_api_token !== undefined) {
+      sets.push("cf_api_token = ?");
+      vals.push(data.cf_api_token || null);
+    }
+    if (data.cf_account_id !== undefined) {
+      sets.push("cf_account_id = ?");
+      vals.push(data.cf_account_id || null);
+    }
+    if (data.cf_worker_name !== undefined) {
+      sets.push("cf_worker_name = ?");
+      vals.push(data.cf_worker_name || null);
+    }
+    if (cfRoutingEnabled !== undefined) {
+      sets.push("cloudflare_routing_enabled = ?");
+      vals.push(cfRoutingEnabled);
+    }
 
     if (sets.length === 0) return;
     vals.push(id);
 
-    await this.db.query(`UPDATE domains SET ${sets.join(", ")} WHERE id = ?`, vals);
+    await this.db.query(
+      `UPDATE domains SET ${sets.join(", ")} WHERE id = ?`,
+      vals,
+    );
     await this.redis.del("domains:active");
   }
 
@@ -381,11 +415,11 @@ export class AdminService {
       [emailId],
     );
     return rows.map((a) => ({
-      id:                a.id,
+      id: a.id,
       original_filename: a.original_filename,
-      mime_type:         a.mime_type,
-      size:              a.size,
-      url:               attachmentUrl(a.stored_name),
+      mime_type: a.mime_type,
+      size: a.size,
+      url: attachmentUrl(a.stored_name),
     }));
   }
 
@@ -431,7 +465,9 @@ export class AdminService {
     );
     const total = countRows[0]?.total ?? 0;
 
-    const [rows] = await this.db.query<(EmailRow & { attachment_count: number })[]>(
+    const [rows] = await this.db.query<
+      (EmailRow & { attachment_count: number })[]
+    >(
       `SELECT e.id, e.message_id, e.sender, e.sender_name, e.subject, e.is_read, e.received_at,
               (SELECT COUNT(*) FROM email_attachments ea WHERE ea.email_id = e.id) AS attachment_count
        FROM emails e
@@ -449,13 +485,13 @@ export class AdminService {
         is_custom: Boolean(account.is_custom),
       },
       emails: rows.map((r) => ({
-        id:               r.id,
-        message_id:       r.message_id,
-        sender:           r.sender,
-        sender_name:      r.sender_name,
-        subject:          r.subject,
-        is_read:          Boolean(r.is_read),
-        received_at:      r.received_at,
+        id: r.id,
+        message_id: r.message_id,
+        sender: r.sender,
+        sender_name: r.sender_name,
+        subject: r.subject,
+        is_read: Boolean(r.is_read),
+        received_at: r.received_at,
         attachment_count: Number(r.attachment_count),
       })),
       total,

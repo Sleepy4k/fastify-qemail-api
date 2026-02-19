@@ -4,7 +4,7 @@ import { LogsController } from "./logs.controller.ts";
 import { LogsQuery } from "./logs.schema.ts";
 
 export async function logsRoutes(app: FastifyInstance) {
-  const svc  = new LogsService(app.db);
+  const svc = new LogsService(app.db);
   const ctrl = new LogsController(svc);
 
   app.addHook("onRequest", app.verifyAdmin);

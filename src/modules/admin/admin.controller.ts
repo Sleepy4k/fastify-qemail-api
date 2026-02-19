@@ -26,7 +26,12 @@ export class AdminController {
     try {
       const admin = await this.svc.login(req.body.username, req.body.password);
       const token = await reply.jwtSign(
-        { sub: admin.id, username: admin.username, role: admin.role, type: "admin" },
+        {
+          sub: admin.id,
+          username: admin.username,
+          role: admin.role,
+          type: "admin",
+        },
         { expiresIn: env.ADMIN_JWT_EXPIRES_IN },
       );
       this.log.log({
@@ -63,7 +68,13 @@ export class AdminController {
     reply: FastifyReply,
   ) {
     const admin = req.user as any;
-    const { name, cloudflare_zone_id, cf_api_token, cf_account_id, cf_worker_name } = req.body;
+    const {
+      name,
+      cloudflare_zone_id,
+      cf_api_token,
+      cf_account_id,
+      cf_worker_name,
+    } = req.body;
     try {
       const id = await this.svc.createDomain(name, cloudflare_zone_id, {
         cf_api_token,
@@ -77,7 +88,11 @@ export class AdminController {
         action: "admin.domain.create",
         resource_type: "domain",
         resource_id: String(id),
-        meta: { name, has_zone_id: !!cloudflare_zone_id, has_cf_token: !!cf_api_token },
+        meta: {
+          name,
+          has_zone_id: !!cloudflare_zone_id,
+          has_cf_token: !!cf_api_token,
+        },
         ip_address: req.ip,
       });
       reply.status(201);
@@ -182,7 +197,11 @@ export class AdminController {
   ) {
     const admin = req.user as any;
     const { page = 1, limit = 20 } = req.query;
-    const result = await this.svc.inspectInbox(req.params.accountId, page, limit);
+    const result = await this.svc.inspectInbox(
+      req.params.accountId,
+      page,
+      limit,
+    );
     this.log.log({
       actor_type: "admin",
       actor_id: admin?.sub,

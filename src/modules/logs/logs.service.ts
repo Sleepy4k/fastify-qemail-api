@@ -8,11 +8,13 @@ export class LogsService {
   constructor(private db: Pool) {}
 
   async list(q: LogsQuery) {
-    const page      = q.page  ?? 1;
-    const limit     = q.limit ?? 50;
-    const sortBy    = ALLOWED_SORT.has(q.sort_by ?? "") ? q.sort_by! : "created_at";
-    const sortDir   = q.sort_dir === "asc" ? "ASC" : "DESC";
-    const offset    = (page - 1) * limit;
+    const page = q.page ?? 1;
+    const limit = q.limit ?? 50;
+    const sortBy = ALLOWED_SORT.has(q.sort_by ?? "")
+      ? q.sort_by!
+      : "created_at";
+    const sortDir = q.sort_dir === "asc" ? "ASC" : "DESC";
+    const offset = (page - 1) * limit;
 
     const where: string[] = [];
     const params: unknown[] = [];
@@ -22,7 +24,6 @@ export class LogsService {
       params.push(q.actor_type);
     }
     if (q.action) {
-      // prefix match: 'admin' cocok dengan 'admin.login', 'admin.delete_account', dll.
       where.push("action LIKE ?");
       params.push(`${q.action}%`);
     }

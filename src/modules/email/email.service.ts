@@ -1,18 +1,41 @@
 import type { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
-import type { DomainRow, AccountRow, EmailRow, CountRow, AttachmentRow } from "../../types/index.ts";
-import { hashPassword, verifyPassword, randomUsername, randomToken } from "../../utils/crypto.ts";
-import { resolveCreds, resolveWorkerName, createEmailRule, deleteEmailRule } from "../../utils/cloudflare.ts";
+import type {
+  DomainRow,
+  AccountRow,
+  EmailRow,
+  CountRow,
+  AttachmentRow,
+} from "../../types/index.ts";
+import {
+  hashPassword,
+  verifyPassword,
+  randomUsername,
+  randomToken,
+} from "../../utils/crypto.ts";
+import {
+  resolveCreds,
+  resolveWorkerName,
+  createEmailRule,
+  deleteEmailRule,
+} from "../../utils/cloudflare.ts";
 import { SettingsService } from "../../utils/settings.ts";
-import { deleteAttachmentFiles, attachmentUrl } from "../../utils/attachment-storage.ts";
+import {
+  deleteAttachmentFiles,
+  attachmentUrl,
+} from "../../utils/attachment-storage.ts";
 
 interface RedisWithPrefix {
   get: (key: string) => Promise<string | null>;
-  setEx: (key: string, seconds: number, value: string) => Promise<string | null>;
+  setEx: (
+    key: string,
+    seconds: number,
+    value: string,
+  ) => Promise<string | null>;
   del: (key: string) => Promise<number>;
 }
 
 const INBOX_LIST_TTL = 1800;
-const INBOX_MSG_TTL  = 1800;
+const INBOX_MSG_TTL = 1800;
 
 export class EmailService {
   private settings: SettingsService;
@@ -45,19 +68,17 @@ export class EmailService {
     await this.redis.del(`admin:inbox:${accountId}:version`);
   }
 
-  // ---------- helpers attachment ----------
-
   private async getAttachmentsForEmail(emailId: number) {
     const [rows] = await this.db.query<AttachmentRow[]>(
       "SELECT id, original_filename, stored_name, mime_type, size FROM email_attachments WHERE email_id = ?",
       [emailId],
     );
     return rows.map((a) => ({
-      id:                a.id,
+      id: a.id,
       original_filename: a.original_filename,
-      mime_type:         a.mime_type,
-      size:              a.size,
-      url:               attachmentUrl(a.stored_name),
+      mime_type: a.mime_type,
+      size: a.size,
+      url: attachmentUrl(a.stored_name),
     }));
   }
 
@@ -79,11 +100,10 @@ export class EmailService {
     return rows.map((r) => r.stored_name);
   }
 
-  // ---------- public methods ----------
-
   async getActiveDomains(): Promise<Array<{ id: number; name: string }>> {
     const cached = await this.redis.get("domains:active");
-    if (cached) return JSON.parse(cached) as Array<{ id: number; name: string }>;
+    if (cached)
+      return JSON.parse(cached) as Array<{ id: number; name: string }>;
 
     const [rows] = await this.db.query<DomainRow[]>(
       "SELECT id, name FROM domains WHERE is_active = 1 ORDER BY name",
@@ -108,7 +128,9 @@ export class EmailService {
       [ip],
     );
     if ((countRows[0]?.total ?? 0) >= maxEmailsPerIp) {
-      throw Object.assign(new Error("Rate limit: too many emails created"), { statusCode: 429 });
+      throw Object.assign(new Error("Rate limit: too many emails created"), {
+        statusCode: 429,
+      });
     }
 
     const [domains] = await this.db.query<DomainRow[]>(
@@ -117,10 +139,12 @@ export class EmailService {
     );
     const domain = domains[0];
     if (!domain) {
-      throw Object.assign(new Error("Domain not found or inactive"), { statusCode: 404 });
+      throw Object.assign(new Error("Domain not found or inactive"), {
+        statusCode: 404,
+      });
     }
 
-    const name  = username ?? randomUsername();
+    const name = username ?? randomUsername();
     const email = `${name.toLowerCase()}@${domain.name}`;
 
     const [existing] = await this.db.query<RowDataPacket[]>(
@@ -128,25 +152,32 @@ export class EmailService {
       [email],
     );
     if (existing.length > 0) {
-      throw Object.assign(new Error("Email address already taken"), { statusCode: 409 });
+      throw Object.assign(new Error("Email address already taken"), {
+        statusCode: 409,
+      });
     }
 
     let cfRuleId: string | null = null;
     if (domain.cloudflare_zone_id) {
-      const creds      = resolveCreds(domain);
+      const creds = resolveCreds(domain);
       const workerName = resolveWorkerName(domain.cf_worker_name);
       const rule = await createEmailRule(
         domain.cloudflare_zone_id,
-        { name: `qemail-${email}`, toAddress: email, forwardTo: workerName, useWorker: true },
+        {
+          name: `qemail-${email}`,
+          toAddress: email,
+          forwardTo: workerName,
+          useWorker: true,
+        },
         creds,
       );
       cfRuleId = rule.id;
     }
 
-    const passwordHash     = password ? await hashPassword(password) : null;
-    const sessionToken     = randomToken();
+    const passwordHash = password ? await hashPassword(password) : null;
+    const sessionToken = randomToken();
     const emailExpiryHours = await this.settings.getEmailExpiryHours();
-    const expiresAt        = new Date(Date.now() + emailExpiryHours * 3600_000);
+    const expiresAt = new Date(Date.now() + emailExpiryHours * 3600_000);
 
     let insertId: number;
     try {
@@ -154,12 +185,26 @@ export class EmailService {
         `INSERT INTO accounts
            (email_address, password_hash, domain_id, is_custom, session_token, cloudflare_rule_id, ip_address, expires_at, forward_to)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [email, passwordHash, domainId, is_custom, sessionToken, cfRuleId, ip, expiresAt, forwardTo ?? null],
+        [
+          email,
+          passwordHash,
+          domainId,
+          is_custom,
+          sessionToken,
+          cfRuleId,
+          ip,
+          expiresAt,
+          forwardTo ?? null,
+        ],
       );
       insertId = result.insertId;
     } catch (dbErr) {
       if (cfRuleId && domain.cloudflare_zone_id) {
-        await deleteEmailRule(domain.cloudflare_zone_id, cfRuleId, resolveCreds(domain)).catch(() => undefined);
+        await deleteEmailRule(
+          domain.cloudflare_zone_id,
+          cfRuleId,
+          resolveCreds(domain),
+        ).catch(() => undefined);
       }
       throw dbErr;
     }
@@ -174,15 +219,23 @@ export class EmailService {
     );
     const account = rows[0];
     if (!account?.password_hash) {
-      throw Object.assign(new Error("Invalid credentials"), { statusCode: 401 });
+      throw Object.assign(new Error("Invalid credentials"), {
+        statusCode: 401,
+      });
     }
 
     const valid = await verifyPassword(account.password_hash, password);
     if (!valid) {
-      throw Object.assign(new Error("Invalid credentials"), { statusCode: 401 });
+      throw Object.assign(new Error("Invalid credentials"), {
+        statusCode: 401,
+      });
     }
 
-    return { id: account.id, email: account.email_address, sessionToken: account.session_token };
+    return {
+      id: account.id,
+      email: account.email_address,
+      sessionToken: account.session_token,
+    };
   }
 
   async getAccountByToken(token: string) {
@@ -195,7 +248,7 @@ export class EmailService {
 
   async getInbox(accountId: number, page: number, limit: number) {
     const versionKey = this.inboxVersionKey(accountId);
-    const listKey    = this.inboxListKey(accountId, page, limit);
+    const listKey = this.inboxListKey(accountId, page, limit);
 
     const version = await this.redis.get(versionKey);
     if (version) {
@@ -211,8 +264,10 @@ export class EmailService {
     );
     const total = countRows[0]?.total ?? 0;
 
-    const [rows] = await this.db.query<(EmailRow & { attachment_count: number })[]>(
-      `SELECT e.id, e.message_id, e.sender, e.sender_name, e.subject, e.is_read, e.received_at,
+    const [rows] = await this.db.query<
+      (EmailRow & { attachment_count: number })[]
+    >(
+      `SELECT e.id, e.message_id, e.sender, e.sender_name, e.subject, e.body_html, e.is_read, e.received_at,
               (SELECT COUNT(*) FROM email_attachments ea WHERE ea.email_id = e.id) AS attachment_count
        FROM emails e
        WHERE e.account_id = ?
@@ -221,7 +276,13 @@ export class EmailService {
       [accountId, limit, offset],
     );
 
-    const result = { data: rows, total, page, limit, pages: Math.ceil(total / limit) };
+    const result = {
+      data: rows,
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+    };
 
     await this.redis.setEx(versionKey, INBOX_LIST_TTL, "1");
     await this.redis.setEx(listKey, INBOX_LIST_TTL, JSON.stringify(result));
@@ -257,20 +318,21 @@ export class EmailService {
     }
 
     if (!msg.is_read) {
-      await this.db.query("UPDATE emails SET is_read = 1 WHERE id = ?", [msg.id]);
+      await this.db.query("UPDATE emails SET is_read = 1 WHERE id = ?", [
+        msg.id,
+      ]);
       msg.is_read = true;
       await this.invalidateInboxCache(accountId);
     }
 
     const attachments = await this.getAttachmentsForEmail(msg.id);
-    const result      = { ...msg, attachments };
+    const result = { ...msg, attachments };
 
     await this.redis.setEx(msgKey, INBOX_MSG_TTL, JSON.stringify(result));
     return result;
   }
 
   async deleteMessage(accountId: number, messageId: string) {
-    // Ambil email id dulu untuk cleanup file attachment
     const [emailRows] = await this.db.query<EmailRow[]>(
       "SELECT id FROM emails WHERE account_id = ? AND message_id = ?",
       [accountId, messageId],
@@ -280,12 +342,10 @@ export class EmailService {
       throw Object.assign(new Error("Message not found"), { statusCode: 404 });
     }
 
-    // Kumpulkan stored_name sebelum dihapus (CASCADE DB akan hapus baris)
     const storedNames = await this.getStoredNamesForEmail(email.id);
 
     await this.db.query("DELETE FROM emails WHERE id = ?", [email.id]);
 
-    // Hapus file fisik dari disk (fire-and-forget)
     deleteAttachmentFiles(storedNames);
 
     await this.redis.del(this.inboxMsgKey(accountId, messageId));
@@ -301,13 +361,20 @@ export class EmailService {
     if (!account) {
       throw Object.assign(new Error("Account not found"), { statusCode: 404 });
     }
-    await this.db.query("UPDATE accounts SET forward_to = ? WHERE id = ?", [forwardTo, account.id]);
+    await this.db.query("UPDATE accounts SET forward_to = ? WHERE id = ?", [
+      forwardTo,
+      account.id,
+    ]);
     await this.invalidateInboxCache(account.id);
   }
 
   async deleteAccount(sessionToken: string) {
     const [rows] = await this.db.query<
-      (AccountRow & { cloudflare_zone_id: string | null; cf_api_token: string | null; cf_account_id: string | null })[]
+      (AccountRow & {
+        cloudflare_zone_id: string | null;
+        cf_api_token: string | null;
+        cf_account_id: string | null;
+      })[]
     >(
       `SELECT a.id, a.cloudflare_rule_id, d.cloudflare_zone_id, d.cf_api_token, d.cf_account_id
        FROM accounts a JOIN domains d ON a.domain_id = d.id WHERE a.session_token = ?`,
@@ -319,16 +386,21 @@ export class EmailService {
     }
 
     if (account.cloudflare_rule_id && account.cloudflare_zone_id) {
-      const creds = resolveCreds({ cf_api_token: account.cf_api_token, cf_account_id: account.cf_account_id });
-      await deleteEmailRule(account.cloudflare_zone_id, account.cloudflare_rule_id, creds);
+      const creds = resolveCreds({
+        cf_api_token: account.cf_api_token,
+        cf_account_id: account.cf_account_id,
+      });
+      await deleteEmailRule(
+        account.cloudflare_zone_id,
+        account.cloudflare_rule_id,
+        creds,
+      );
     }
 
-    // Kumpulkan semua file attachment sebelum CASCADE menghapus baris DB
     const storedNames = await this.getStoredNamesForAccount(account.id);
 
     await this.db.query("DELETE FROM accounts WHERE id = ?", [account.id]);
 
-    // Hapus file fisik dari disk (fire-and-forget)
     deleteAttachmentFiles(storedNames);
 
     await this.invalidateInboxCache(account.id);

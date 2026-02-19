@@ -16,8 +16,8 @@ import {
 } from "./admin.schema.ts";
 
 export async function adminRoutes(app: FastifyInstance) {
-  const svc  = new AdminService(app.db, app.redis);
-  const log  = new LogService(app.db);
+  const svc = new AdminService(app.db, app.redis);
+  const log = new LogService(app.db);
   const ctrl = new AdminController(svc, log);
 
   app.post(
