@@ -15,6 +15,7 @@ import { emailRoutes } from "./modules/email/email.routes.ts";
 import { webhookRoutes } from "./modules/webhook/webhook.routes.ts";
 import { adminRoutes } from "./modules/admin/admin.routes.ts";
 import { logsRoutes } from "./modules/logs/logs.routes.ts";
+import { attachmentsRoutes } from "./modules/attachments/attachments.routes.ts";
 
 export async function buildApp() {
   const app = Fastify({
@@ -57,6 +58,7 @@ export async function buildApp() {
   await app.register(webhookRoutes, { prefix: "/v1/webhook" });
   await app.register(adminRoutes, { prefix: "/v1/admin" });
   await app.register(logsRoutes, { prefix: "/v1/admin/logs" });
+  await app.register(attachmentsRoutes, { prefix: "/v1/files" });
 
   return app;
 }

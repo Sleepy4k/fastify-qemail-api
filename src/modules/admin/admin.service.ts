@@ -6,6 +6,7 @@ import type {
   EmailRow,
   CountRow,
   SettingRow,
+  AttachmentRow,
 } from "../../types/index.ts";
 import { verifyPassword } from "../../utils/crypto.ts";
 import {
@@ -16,6 +17,7 @@ import {
   listEmailRules,
   deleteEmailRule,
 } from "../../utils/cloudflare.ts";
+import { deleteAttachmentFiles, attachmentUrl } from "../../utils/attachment-storage.ts";
 
 interface RedisWithPrefix {
   get: (key: string) => Promise<string | null>;
@@ -354,7 +356,9 @@ export class AdminService {
       );
     }
 
+    const storedNames = await this.getStoredNamesForAccount(accountId);
     await this.db.query("DELETE FROM accounts WHERE id = ?", [accountId]);
+    deleteAttachmentFiles(storedNames);
     await this.invalidateStatsCache();
     await this.invalidateInboxCache(accountId);
   }
@@ -369,6 +373,30 @@ export class AdminService {
 
   async invalidateInboxCache(accountId: number) {
     await this.redis.del(`admin:inbox:${accountId}:version`);
+  }
+
+  private async getAttachmentsForEmail(emailId: number) {
+    const [rows] = await this.db.query<AttachmentRow[]>(
+      "SELECT id, original_filename, stored_name, mime_type, size FROM email_attachments WHERE email_id = ?",
+      [emailId],
+    );
+    return rows.map((a) => ({
+      id:                a.id,
+      original_filename: a.original_filename,
+      mime_type:         a.mime_type,
+      size:              a.size,
+      url:               attachmentUrl(a.stored_name),
+    }));
+  }
+
+  private async getStoredNamesForAccount(accountId: number): Promise<string[]> {
+    const [rows] = await this.db.query<AttachmentRow[]>(
+      `SELECT ea.stored_name FROM email_attachments ea
+       JOIN emails e ON ea.email_id = e.id
+       WHERE e.account_id = ?`,
+      [accountId],
+    );
+    return rows.map((r) => r.stored_name);
   }
 
   async inspectInbox(accountId: number, page: number, limit: number) {
@@ -403,9 +431,13 @@ export class AdminService {
     );
     const total = countRows[0]?.total ?? 0;
 
-    const [rows] = await this.db.query<EmailRow[]>(
-      `SELECT id, message_id, sender, sender_name, subject, body_text, body_html, is_read, received_at
-       FROM emails WHERE account_id = ? ORDER BY received_at DESC LIMIT ? OFFSET ?`,
+    const [rows] = await this.db.query<(EmailRow & { attachment_count: number })[]>(
+      `SELECT e.id, e.message_id, e.sender, e.sender_name, e.subject, e.is_read, e.received_at,
+              (SELECT COUNT(*) FROM email_attachments ea WHERE ea.email_id = e.id) AS attachment_count
+       FROM emails e
+       WHERE e.account_id = ?
+       ORDER BY e.received_at DESC
+       LIMIT ? OFFSET ?`,
       [accountId, limit, offset],
     );
 
@@ -417,13 +449,14 @@ export class AdminService {
         is_custom: Boolean(account.is_custom),
       },
       emails: rows.map((r) => ({
-        id: r.id,
-        message_id: r.message_id,
-        sender: r.sender,
-        sender_name: r.sender_name,
-        subject: r.subject,
-        is_read: Boolean(r.is_read),
-        received_at: r.received_at,
+        id:               r.id,
+        message_id:       r.message_id,
+        sender:           r.sender,
+        sender_name:      r.sender_name,
+        subject:          r.subject,
+        is_read:          Boolean(r.is_read),
+        received_at:      r.received_at,
+        attachment_count: Number(r.attachment_count),
       })),
       total,
       page,
@@ -460,6 +493,8 @@ export class AdminService {
       throw Object.assign(new Error("Message not found"), { statusCode: 404 });
     }
 
+    const attachments = await this.getAttachmentsForEmail(msg.id);
+
     const result = {
       id: msg.id,
       message_id: msg.message_id,
@@ -472,6 +507,7 @@ export class AdminService {
       raw_headers: msg.raw_headers ? JSON.parse(msg.raw_headers) : null,
       is_read: Boolean(msg.is_read),
       received_at: msg.received_at,
+      attachments,
     };
 
     await this.redis.setEx(msgKey, INBOX_MSG_TTL, JSON.stringify(result));

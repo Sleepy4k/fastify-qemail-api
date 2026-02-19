@@ -22,34 +22,40 @@ export class WebhookController {
     _reply: FastifyReply,
   ) {
     this.checkSecret(req);
+
+    // `to` dan `from` diambil dari header HTTP, fallback ke "unknown"
+    const to   = (req.headers["x-email-to"]   as string | undefined)?.trim() || "unknown";
+    const from = (req.headers["x-email-from"] as string | undefined)?.trim() || "unknown";
+
     try {
-      const id = await this.svc.storeEmail(req.body);
+      const id = await this.svc.storeEmail(req.body, to, from);
       this.log.log({
-        actor_type: "system",
-        actor_label: "cloudflare-worker",
-        action: "webhook.email_received",
+        actor_type:    "system",
+        actor_label:   "cloudflare-worker",
+        action:        "webhook.email_received",
         resource_type: "email",
-        resource_id: req.body.messageId,
+        resource_id:   req.body.messageId,
         meta: {
-          to: req.body.to,
-          from: req.body.from,
-          subject: req.body.subject,
-          stored_id: id,
+          to,
+          from,
+          subject:              req.body.subject,
+          attachment_count:     req.body.attachments?.length ?? 0,
+          stored_id:            id,
         },
         ip_address: req.ip,
       });
       return { ok: true, id };
     } catch (err: any) {
       this.log.log({
-        actor_type: "system",
-        actor_label: "cloudflare-worker",
-        action: "webhook.email_received",
-        status: "failure",
+        actor_type:    "system",
+        actor_label:   "cloudflare-worker",
+        action:        "webhook.email_received",
+        status:        "failure",
         resource_type: "email",
-        resource_id: req.body.messageId,
-        meta: { to: req.body.to, from: req.body.from },
-        ip_address: req.ip,
-        error: err?.message,
+        resource_id:   req.body.messageId,
+        meta:          { to, from },
+        ip_address:    req.ip,
+        error:         err?.message,
       });
       throw err;
     }

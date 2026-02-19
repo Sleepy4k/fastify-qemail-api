@@ -26,3 +26,10 @@ export function randomUsername(): string {
 export function randomToken(): string {
   return customAlphabet(alphabet + "ABCDEFGHIJKLMNOPQRSTUVWXYZ", 48)();
 }
+
+/** Menghasilkan string hex acak sepanjang `bytes * 2` karakter (e.g. 16 → 32 chars = 128-bit entropy) */
+export function randomHex(bytes: number): string {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
+}

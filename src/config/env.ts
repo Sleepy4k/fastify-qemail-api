@@ -36,4 +36,7 @@ export const env = {
   MAX_EMAILS_PER_IP: Number(process.env["MAX_EMAILS_PER_IP"] ?? 10),
 
   ENABLE_SWAGGER: process.env["ENABLE_SWAGGER"] !== "false",
+
+  UPLOAD_DIR:      process.env["UPLOAD_DIR"]      ?? "./uploads/attachments",
+  UPLOAD_BASE_URL: process.env["UPLOAD_BASE_URL"] ?? "http://localhost:3000",
 } as const;

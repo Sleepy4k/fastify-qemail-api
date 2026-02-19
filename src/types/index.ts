@@ -71,9 +71,19 @@ export interface ActivityLogRow extends RowDataPacket {
   status: "success" | "failure";
   resource_type: string | null;
   resource_id: string | null;
-  meta: Record<string, unknown> | null; // mysql2 auto-parse kolom JSON
+  meta: Record<string, unknown> | null;
   ip_address: string | null;
   error: string | null;
+  created_at: Date;
+}
+
+export interface AttachmentRow extends RowDataPacket {
+  id: number;
+  email_id: number;
+  original_filename: string;
+  stored_name: string;
+  mime_type: string;
+  size: number;
   created_at: Date;
 }
 

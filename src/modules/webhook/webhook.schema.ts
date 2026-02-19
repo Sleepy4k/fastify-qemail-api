@@ -1,14 +1,25 @@
 import { Type, type Static } from "@sinclair/typebox";
 
+export const AttachmentItem = Type.Object({
+  filename: Type.String(),
+  path:     Type.String({ description: "data URI, HTTPS URL, atau raw base64" }),
+  mimeType: Type.String(),
+  size:     Type.Number({ minimum: 0, description: "Ukuran dalam bytes" }),
+});
+export type AttachmentItem = Static<typeof AttachmentItem>;
+
+/**
+ * Body webhook dari Cloudflare Worker.
+ * `from` dan `to` TIDAK ada di body — diambil dari header HTTP:
+ *   x-email-from  (fallback: "unknown")
+ *   x-email-to    (fallback: "unknown")
+ */
 export const IncomingEmailBody = Type.Object({
-  from: Type.String(),
-  to: Type.String(),
-  subject: Type.String(),
-  text: Type.Optional(Type.String()),
-  html: Type.Optional(Type.String()),
-  headers: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-  messageId: Type.String(),
-  receivedAt: Type.String(),
+  messageId:   Type.String(),
+  subject:     Type.String(),
+  text:        Type.Optional(Type.String()),
+  html:        Type.Optional(Type.String()),
+  attachments: Type.Optional(Type.Array(AttachmentItem)),
 });
 export type IncomingEmailBody = Static<typeof IncomingEmailBody>;
 
