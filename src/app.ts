@@ -53,10 +53,10 @@ export async function buildApp() {
     };
   });
 
-  await app.register(emailRoutes, { prefix: "/api/v1/email" });
-  await app.register(webhookRoutes, { prefix: "/api/v1/webhook" });
-  await app.register(adminRoutes, { prefix: "/api/v1/admin" });
-  await app.register(logsRoutes, { prefix: "/api/v1/admin/logs" });
+  await app.register(emailRoutes, { prefix: "/v1/email" });
+  await app.register(webhookRoutes, { prefix: "/v1/webhook" });
+  await app.register(adminRoutes, { prefix: "/v1/admin" });
+  await app.register(logsRoutes, { prefix: "/v1/admin/logs" });
 
   return app;
 }
