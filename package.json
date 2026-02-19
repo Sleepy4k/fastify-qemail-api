@@ -37,6 +37,7 @@
     "argon2": "^0.41.1",
     "fastify": "^5.2.0",
     "fastify-plugin": "^5.0.1",
+    "mailparser": "^3.9.3",
     "mysql2": "^3.11.5",
     "nanoid": "^5.0.9",
     "pino": "^9.5.0",
@@ -45,6 +46,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/mailparser": "^3.4.6",
     "@types/node": "^22.10.2",
     "@types/redis": "^4.0.11",
     "@typescript-eslint/eslint-plugin": "^8.18.2",
