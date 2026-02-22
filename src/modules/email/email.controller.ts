@@ -9,12 +9,12 @@ import type {
   MessageParams,
   UpdateForwardBody,
 } from "./email.schema.ts";
-import { env } from "../../config/env.ts";
 
 export class EmailController {
   constructor(
     private svc: EmailService,
     private log: LogService,
+    private jwtExpiresIn: string,
   ) {}
 
   async domains(_req: FastifyRequest, _reply: FastifyReply) {
@@ -49,7 +49,7 @@ export class EmailController {
       if (password) {
         token = await reply.jwtSign(
           { sub: result.id, email: result.email, type: "user" },
-          { expiresIn: env.JWT_EXPIRES_IN },
+          { expiresIn: this.jwtExpiresIn },
         );
       }
 
@@ -95,7 +95,7 @@ export class EmailController {
 
       const token = await reply.jwtSign(
         { sub: account.id, email: account.email, type: "user" },
-        { expiresIn: env.JWT_EXPIRES_IN },
+        { expiresIn: this.jwtExpiresIn },
       );
 
       this.log.log({

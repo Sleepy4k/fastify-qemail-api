@@ -1,6 +1,6 @@
 import Fastify from "fastify";
-import { env } from "./config/env.ts";
 
+import envPlugin from "./plugins/external/env.ts";
 import mysqlPlugin from "./plugins/external/mysql.ts";
 import redisPlugin from "./plugins/external/redis.ts";
 import corsPlugin from "./plugins/external/cors.ts";
@@ -18,25 +18,27 @@ import { logsRoutes } from "./modules/logs/logs.routes.ts";
 import { attachmentsRoutes } from "./modules/attachments/attachments.routes.ts";
 
 export async function buildApp() {
+  const isProd = process.env["NODE_ENV"] === "production";
+
   const app = Fastify({
     logger: {
-      level: env.NODE_ENV === "production" ? "info" : "debug",
-      transport:
-        env.NODE_ENV === "production"
-          ? undefined
-          : {
-              target: "pino-pretty",
-              options: {
-                colorize: true,
-                translateTime: "HH:MM:ss Z",
-                ignore: "pid,hostname",
-              },
+      level: isProd ? "info" : "debug",
+      transport: isProd
+        ? undefined
+        : {
+            target: "pino-pretty",
+            options: {
+              colorize: true,
+              translateTime: "HH:MM:ss Z",
+              ignore: "pid,hostname",
             },
+          },
     },
     trustProxy: true,
     requestIdHeader: "x-request-id",
   });
 
+  await app.register(envPlugin);
   await app.register(mysqlPlugin);
   await app.register(redisPlugin);
   await app.register(corsPlugin);
@@ -62,4 +64,3 @@ export async function buildApp() {
 
   return app;
 }
-

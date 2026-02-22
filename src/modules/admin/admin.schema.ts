@@ -52,6 +52,8 @@ export const PaginationQuery = Type.Object({
   page: Type.Optional(Type.Number({ minimum: 1, default: 1 })),
   limit: Type.Optional(Type.Number({ minimum: 1, maximum: 100, default: 20 })),
   search: Type.Optional(Type.String()),
+  domain_id: Type.Optional(Type.Number()),
+  is_custom: Type.Optional(Type.Boolean()),
 });
 export type PaginationQuery = Static<typeof PaginationQuery>;
 

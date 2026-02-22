@@ -16,10 +16,6 @@ export interface LogEntry {
   error?: string | null;
 }
 
-/**
- * LogService menulis ke tabel activity_logs secara fire-and-forget.
- * Tidak pernah throw — kegagalan tulis log tidak boleh mengganggu response.
- */
 export class LogService {
   constructor(private db: Pool) {}
 
@@ -57,7 +53,6 @@ export class LogService {
         ],
       )
       .catch(() => {
-        // Gagal tulis log tidak boleh crash server
       });
   }
 }

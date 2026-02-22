@@ -3,6 +3,7 @@ import { simpleParser } from "mailparser";
 import { WebhookService } from "./webhook.service.ts";
 import { WebhookController } from "./webhook.controller.ts";
 import { LogService } from "../../utils/log-service.ts";
+import { AttachmentStorage } from "../../utils/attachment-storage.ts";
 import {
   IncomingEmailBody,
   WebhookReply,
@@ -40,9 +41,10 @@ export async function webhookRoutes(app: FastifyInstance) {
     app.addContentTypeParser(ct, { parseAs: "buffer" }, mimeParser);
   }
 
-  const svc = new WebhookService(app.db, app.redis);
+  const storage = new AttachmentStorage(app.config.UPLOAD_DIR, app.config.UPLOAD_BASE_URL);
+  const svc = new WebhookService(app.db, app.redis, storage);
   const log = new LogService(app.db);
-  const ctrl = new WebhookController(svc, log);
+  const ctrl = new WebhookController(svc, log, app.config.CF_WEBHOOK_SECRET);
 
   app.post(
     "/incoming-email",

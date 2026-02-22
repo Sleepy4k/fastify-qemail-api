@@ -5,7 +5,7 @@ import { FileParams, NotFoundReply } from "./attachments.schema.ts";
 
 export async function attachmentsRoutes(app: FastifyInstance) {
   const svc = new AttachmentsService(app.db);
-  const ctrl = new AttachmentsController(svc);
+  const ctrl = new AttachmentsController(svc, app.config.UPLOAD_DIR);
 
   app.get(
     "/:storedName",

@@ -1,13 +1,12 @@
 import { buildApp } from "./app.ts";
-import { env } from "./config/env.ts";
 
 async function main() {
   const app = await buildApp();
 
   try {
-    await app.listen({ host: env.HOST, port: env.PORT });
-    app.log.info(`Server listening on http://${env.HOST}:${env.PORT}`);
-    app.log.info(`Swagger docs at http://${env.HOST}:${env.PORT}/docs`);
+    await app.listen({ host: app.config.HOST, port: app.config.PORT });
+    app.log.info(`Server listening on http://${app.config.HOST}:${app.config.PORT}`);
+    app.log.info(`Swagger docs at http://${app.config.HOST}:${app.config.PORT}/docs`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

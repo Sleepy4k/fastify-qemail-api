@@ -1,7 +1,7 @@
 import type { Pool, ResultSetHeader } from "mysql2/promise";
 import type { AccountRow } from "../../types/index.ts";
 import type { IncomingEmailBody } from "./webhook.schema.ts";
-import { saveAttachment } from "../../utils/attachment-storage.ts";
+import type { AttachmentStorage } from "../../utils/attachment-storage.ts";
 
 interface RedisWithPrefix {
   del: (key: string) => Promise<number>;
@@ -11,6 +11,7 @@ export class WebhookService {
   constructor(
     private db: Pool,
     private redis: RedisWithPrefix,
+    private storage: AttachmentStorage,
   ) {}
 
   async getForwardTarget(to: string): Promise<string | null> {
@@ -61,7 +62,7 @@ export class WebhookService {
 
     for (const att of attachments) {
       try {
-        const storedName = await saveAttachment(
+        const storedName = await this.storage.save(
           att.path,
           att.filename,
           att.mimeType,

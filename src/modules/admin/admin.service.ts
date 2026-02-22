@@ -17,10 +17,7 @@ import {
   listEmailRules,
   deleteEmailRule,
 } from "../../utils/cloudflare.ts";
-import {
-  deleteAttachmentFiles,
-  attachmentUrl,
-} from "../../utils/attachment-storage.ts";
+import { AttachmentStorage } from "../../utils/attachment-storage.ts";
 
 interface RedisWithPrefix {
   get: (key: string) => Promise<string | null>;
@@ -34,6 +31,11 @@ interface RedisWithPrefix {
 
 const INBOX_LIST_TTL = 3600;
 const INBOX_MSG_TTL = 3600;
+
+interface CfConfig {
+  apiToken: string;
+  accountId: string;
+}
 
 interface DomainListItem {
   id: number;
@@ -67,6 +69,8 @@ export class AdminService {
   constructor(
     private db: Pool,
     private redis: RedisWithPrefix,
+    private cfConfig: CfConfig,
+    private storage: AttachmentStorage,
   ) {}
 
   private async invalidateStatsCache() {
@@ -138,7 +142,7 @@ export class AdminService {
     let routingEnabled = false;
 
     if (zoneId) {
-      const creds = resolveCreds(cfFields);
+      const creds = resolveCreds(cfFields, this.cfConfig);
 
       const valid = await verifyZone(zoneId, creds);
       if (!valid) {
@@ -199,10 +203,13 @@ export class AdminService {
         ? data.cf_account_id
         : current.cf_account_id;
 
-    const newCreds = resolveCreds({
-      cf_api_token: effectiveCfToken || null,
-      cf_account_id: effectiveCfAccountId || null,
-    });
+    const newCreds = resolveCreds(
+      {
+        cf_api_token: effectiveCfToken || null,
+        cf_account_id: effectiveCfAccountId || null,
+      },
+      this.cfConfig,
+    );
 
     const newZoneId =
       data.cloudflare_zone_id !== undefined
@@ -288,7 +295,7 @@ export class AdminService {
 
     if (domain?.cloudflare_zone_id) {
       const zoneId = domain.cloudflare_zone_id;
-      const creds = resolveCreds(domain);
+      const creds = resolveCreds(domain, this.cfConfig);
 
       const [accountRows] = await this.db.query<AccountRow[]>(
         "SELECT cloudflare_rule_id FROM accounts WHERE domain_id = ? AND cloudflare_rule_id IS NOT NULL",
@@ -309,15 +316,25 @@ export class AdminService {
     await this.invalidateStatsCache();
   }
 
-  async listAccounts(page: number, limit: number, search?: string) {
+  async listAccounts(page: number, limit: number, search?: string, domainId?: number, isCustom?: boolean) {
     const offset = (page - 1) * limit;
-    let where = "";
+    const conditions: string[] = [];
     const params: unknown[] = [];
 
     if (search) {
-      where = "WHERE a.email_address LIKE ?";
+      conditions.push("a.email_address LIKE ?");
       params.push(`%${search}%`);
     }
+    if (domainId !== undefined) {
+      conditions.push("a.domain_id = ?");
+      params.push(domainId);
+    }
+    if (isCustom !== undefined) {
+      conditions.push("a.is_custom = ?");
+      params.push(isCustom ? 1 : 0);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const [countRows] = await this.db.query<CountRow[]>(
       `SELECT COUNT(*) AS total FROM accounts a ${where}`,
@@ -329,7 +346,7 @@ export class AdminService {
       `SELECT
         a.id, a.email_address, a.domain_id,
         d.name as domain_name, a.is_custom, a.ip_address,
-        a.expires_at, a.created_at,
+        a.forward_to, a.expires_at, a.created_at,
         (SELECT COUNT(*) FROM emails WHERE account_id = a.id) as email_count
        FROM accounts a
        LEFT JOIN domains d ON a.domain_id = d.id
@@ -347,6 +364,7 @@ export class AdminService {
         domain_name: r["domain_name"] as string,
         is_custom: Boolean(r["is_custom"]),
         ip_address: r["ip_address"] as string | null,
+        forward_to: r["forward_to"] as string | null,
         expires_at: r["expires_at"] as string | null,
         created_at: r["created_at"] as string,
         email_count: r["email_count"] as number,
@@ -379,10 +397,10 @@ export class AdminService {
     }
 
     if (account.cloudflare_rule_id && account.cloudflare_zone_id) {
-      const creds = resolveCreds({
-        cf_api_token: account.cf_api_token,
-        cf_account_id: account.cf_account_id,
-      });
+      const creds = resolveCreds(
+        { cf_api_token: account.cf_api_token, cf_account_id: account.cf_account_id },
+        this.cfConfig,
+      );
       await deleteEmailRule(
         account.cloudflare_zone_id,
         account.cloudflare_rule_id,
@@ -392,7 +410,7 @@ export class AdminService {
 
     const storedNames = await this.getStoredNamesForAccount(accountId);
     await this.db.query("DELETE FROM accounts WHERE id = ?", [accountId]);
-    deleteAttachmentFiles(storedNames);
+    this.storage.deleteMany(storedNames);
     await this.invalidateStatsCache();
     await this.invalidateInboxCache(accountId);
   }
@@ -419,7 +437,7 @@ export class AdminService {
       original_filename: a.original_filename,
       mime_type: a.mime_type,
       size: a.size,
-      url: attachmentUrl(a.stored_name),
+      url: this.storage.url(a.stored_name),
     }));
   }
 
@@ -557,7 +575,7 @@ export class AdminService {
     );
     const domain = domainRows[0];
     if (!domain?.cloudflare_zone_id) return [];
-    const creds = resolveCreds(domain);
+    const creds = resolveCreds(domain, this.cfConfig);
     return listEmailRules(domain.cloudflare_zone_id, creds);
   }
 

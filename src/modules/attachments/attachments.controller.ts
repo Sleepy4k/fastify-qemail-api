@@ -5,10 +5,12 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import type { AttachmentsService } from "./attachments.service.ts";
 import type { FileParams } from "./attachments.schema.ts";
 import { STORED_NAME_RE } from "./attachments.schema.ts";
-import { env } from "../../config/env.ts";
 
 export class AttachmentsController {
-  constructor(private svc: AttachmentsService) {}
+  constructor(
+    private svc: AttachmentsService,
+    private uploadDir: string,
+  ) {}
 
   async serveFile(
     req: FastifyRequest<{ Params: FileParams }>,
@@ -25,7 +27,7 @@ export class AttachmentsController {
       return reply.status(404).send({ message: "Not found" });
     }
 
-    const filePath = join(env.UPLOAD_DIR, storedName);
+    const filePath = join(this.uploadDir, storedName);
     try {
       await stat(filePath);
     } catch {

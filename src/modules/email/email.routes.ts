@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { EmailService } from "./email.service.ts";
 import { EmailController } from "./email.controller.ts";
 import { LogService } from "../../utils/log-service.ts";
+import { AttachmentStorage } from "../../utils/attachment-storage.ts";
 import {
   GenerateBody,
   GenerateReply,
@@ -16,9 +17,14 @@ import {
 import { Type } from "@sinclair/typebox";
 
 export async function emailRoutes(app: FastifyInstance) {
-  const svc = new EmailService(app.db, app.redis);
+  const storage = new AttachmentStorage(app.config.UPLOAD_DIR, app.config.UPLOAD_BASE_URL);
+  const svc = new EmailService(app.db, app.redis, {
+    apiToken: app.config.CF_API_TOKEN,
+    accountId: app.config.CF_ACCOUNT_ID,
+    workerName: app.config.CF_WORKER_NAME,
+  }, storage);
   const log = new LogService(app.db);
-  const ctrl = new EmailController(svc, log);
+  const ctrl = new EmailController(svc, log, app.config.JWT_EXPIRES_IN);
 
   app.get(
     "/domains",

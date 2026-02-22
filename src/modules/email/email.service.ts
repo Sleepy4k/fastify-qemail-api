@@ -19,10 +19,7 @@ import {
   deleteEmailRule,
 } from "../../utils/cloudflare.ts";
 import { SettingsService } from "../../utils/settings.ts";
-import {
-  deleteAttachmentFiles,
-  attachmentUrl,
-} from "../../utils/attachment-storage.ts";
+import { AttachmentStorage } from "../../utils/attachment-storage.ts";
 
 interface RedisWithPrefix {
   get: (key: string) => Promise<string | null>;
@@ -37,12 +34,20 @@ interface RedisWithPrefix {
 const INBOX_LIST_TTL = 1800;
 const INBOX_MSG_TTL = 1800;
 
+interface CfConfig {
+  apiToken: string;
+  accountId: string;
+  workerName: string;
+}
+
 export class EmailService {
   private settings: SettingsService;
 
   constructor(
     private db: Pool,
     private redis: RedisWithPrefix,
+    private cfConfig: CfConfig,
+    private storage: AttachmentStorage,
   ) {
     this.settings = new SettingsService(db, redis);
   }
@@ -78,7 +83,7 @@ export class EmailService {
       original_filename: a.original_filename,
       mime_type: a.mime_type,
       size: a.size,
-      url: attachmentUrl(a.stored_name),
+      url: this.storage.url(a.stored_name),
     }));
   }
 
@@ -159,8 +164,8 @@ export class EmailService {
 
     let cfRuleId: string | null = null;
     if (domain.cloudflare_zone_id) {
-      const creds = resolveCreds(domain);
-      const workerName = resolveWorkerName(domain.cf_worker_name);
+      const creds = resolveCreds(domain, this.cfConfig);
+      const workerName = resolveWorkerName(domain.cf_worker_name, this.cfConfig.workerName);
       const rule = await createEmailRule(
         domain.cloudflare_zone_id,
         {
@@ -203,7 +208,7 @@ export class EmailService {
         await deleteEmailRule(
           domain.cloudflare_zone_id,
           cfRuleId,
-          resolveCreds(domain),
+          resolveCreds(domain, this.cfConfig),
         ).catch(() => undefined);
       }
       throw dbErr;
@@ -346,7 +351,7 @@ export class EmailService {
 
     await this.db.query("DELETE FROM emails WHERE id = ?", [email.id]);
 
-    deleteAttachmentFiles(storedNames);
+    this.storage.deleteMany(storedNames);
 
     await this.redis.del(this.inboxMsgKey(accountId, messageId));
     await this.invalidateInboxCache(accountId);
@@ -386,10 +391,10 @@ export class EmailService {
     }
 
     if (account.cloudflare_rule_id && account.cloudflare_zone_id) {
-      const creds = resolveCreds({
-        cf_api_token: account.cf_api_token,
-        cf_account_id: account.cf_account_id,
-      });
+      const creds = resolveCreds(
+        { cf_api_token: account.cf_api_token, cf_account_id: account.cf_account_id },
+        this.cfConfig,
+      );
       await deleteEmailRule(
         account.cloudflare_zone_id,
         account.cloudflare_rule_id,
@@ -401,7 +406,7 @@ export class EmailService {
 
     await this.db.query("DELETE FROM accounts WHERE id = ?", [account.id]);
 
-    deleteAttachmentFiles(storedNames);
+    this.storage.deleteMany(storedNames);
 
     await this.invalidateInboxCache(account.id);
   }

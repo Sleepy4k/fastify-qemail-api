@@ -1,5 +1,3 @@
-import { env } from "../config/env.ts";
-
 const BASE = "https://api.cloudflare.com/client/v4";
 
 export interface CfCredentials {
@@ -12,15 +10,19 @@ export function resolveCreds(
     cf_api_token?: string | null;
     cf_account_id?: string | null;
   } = {},
+  defaults: { apiToken?: string; accountId?: string } = {},
 ): CfCredentials {
   return {
-    apiToken: domain.cf_api_token ?? env.CF_API_TOKEN,
-    accountId: domain.cf_account_id ?? env.CF_ACCOUNT_ID,
+    apiToken: domain.cf_api_token ?? defaults.apiToken ?? "",
+    accountId: domain.cf_account_id ?? defaults.accountId,
   };
 }
 
-export function resolveWorkerName(domainWorkerName?: string | null): string {
-  return domainWorkerName ?? env.CF_WORKER_NAME;
+export function resolveWorkerName(
+  domainWorkerName?: string | null,
+  defaultWorkerName = "",
+): string {
+  return domainWorkerName ?? defaultWorkerName;
 }
 
 async function cfFetch<T>(
@@ -220,7 +222,8 @@ export interface CfDestinationAddress {
 export async function listDestinationAddresses(
   creds: CfCredentials,
 ): Promise<CfDestinationAddress[]> {
-  const accountId = creds.accountId ?? env.CF_ACCOUNT_ID;
+  const accountId = creds.accountId;
+  if (!accountId) throw new Error("Cloudflare accountId is required");
   return cfFetch<CfDestinationAddress[]>(
     `/accounts/${accountId}/email/routing/addresses`,
     creds,
@@ -231,7 +234,8 @@ export async function createDestinationAddress(
   email: string,
   creds: CfCredentials,
 ): Promise<CfDestinationAddress> {
-  const accountId = creds.accountId ?? env.CF_ACCOUNT_ID;
+  const accountId = creds.accountId;
+  if (!accountId) throw new Error("Cloudflare accountId is required");
   return cfFetch<CfDestinationAddress>(
     `/accounts/${accountId}/email/routing/addresses`,
     creds,
@@ -243,7 +247,8 @@ export async function deleteDestinationAddress(
   addressId: string,
   creds: CfCredentials,
 ): Promise<CfDestinationAddress> {
-  const accountId = creds.accountId ?? env.CF_ACCOUNT_ID;
+  const accountId = creds.accountId;
+  if (!accountId) throw new Error("Cloudflare accountId is required");
   return cfFetch<CfDestinationAddress>(
     `/accounts/${accountId}/email/routing/addresses/${addressId}`,
     creds,

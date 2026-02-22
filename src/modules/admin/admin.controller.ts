@@ -11,12 +11,12 @@ import type {
   InboxMessageParam,
   UpdateSettingBody,
 } from "./admin.schema.ts";
-import { env } from "../../config/env.ts";
 
 export class AdminController {
   constructor(
     private svc: AdminService,
     private log: LogService,
+    private adminJwtExpiresIn: string,
   ) {}
 
   async login(
@@ -32,7 +32,7 @@ export class AdminController {
           role: admin.role,
           type: "admin",
         },
-        { expiresIn: env.ADMIN_JWT_EXPIRES_IN },
+        { expiresIn: this.adminJwtExpiresIn },
       );
       this.log.log({
         actor_type: "admin",
@@ -184,8 +184,8 @@ export class AdminController {
     req: FastifyRequest<{ Querystring: PaginationQuery }>,
     _reply: FastifyReply,
   ) {
-    const { page = 1, limit = 20, search } = req.query;
-    return this.svc.listAccounts(page, limit, search);
+    const { page = 1, limit = 20, search, domain_id, is_custom } = req.query;
+    return this.svc.listAccounts(page, limit, search, domain_id, is_custom);
   }
 
   async inspectInbox(

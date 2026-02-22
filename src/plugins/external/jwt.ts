@@ -2,16 +2,15 @@ import fp from "fastify-plugin";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import jwt from "@fastify/jwt";
 import cookie from "@fastify/cookie";
-import { env } from "../../config/env.ts";
 import type { UserPayload, AdminPayload } from "../../types/index.ts";
 
 export default fp(
   async function jwtPlugin(app: FastifyInstance) {
-    await app.register(cookie, { secret: env.SESSION_SECRET });
+    await app.register(cookie, { secret: app.config.SESSION_SECRET });
 
     await app.register(jwt, {
-      secret: env.JWT_SECRET,
-      sign: { expiresIn: env.JWT_EXPIRES_IN },
+      secret: app.config.JWT_SECRET,
+      sign: { expiresIn: app.config.JWT_EXPIRES_IN },
     });
 
     app.decorate(
@@ -40,5 +39,5 @@ export default fp(
       },
     );
   },
-  { name: "jwt" },
+  { name: "jwt", dependencies: ["env"] },
 );

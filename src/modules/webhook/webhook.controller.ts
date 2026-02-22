@@ -5,17 +5,17 @@ import type {
   IncomingEmailBody,
   ForwardLookupQuery,
 } from "./webhook.schema.ts";
-import { env } from "../../config/env.ts";
 
 export class WebhookController {
   constructor(
     private svc: WebhookService,
     private log: LogService,
+    private cfWebhookSecret: string,
   ) {}
 
   private checkSecret(req: FastifyRequest) {
     const secret = req.headers["x-webhook-secret"];
-    if (!env.CF_WEBHOOK_SECRET || secret !== env.CF_WEBHOOK_SECRET) {
+    if (!this.cfWebhookSecret || secret !== this.cfWebhookSecret) {
       throw Object.assign(new Error("Unauthorized"), { statusCode: 401 });
     }
   }

@@ -2,11 +2,10 @@ import fp from "fastify-plugin";
 import type { FastifyInstance } from "fastify";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { env } from "../../config/env.ts";
 
 export default fp(
   async function swaggerPlugin(app: FastifyInstance) {
-    if (!env.ENABLE_SWAGGER) return;
+    if (!app.config.ENABLE_SWAGGER) return;
 
     await app.register(swagger, {
       openapi: {
@@ -33,5 +32,5 @@ export default fp(
       uiConfig: { docExpansion: "list", deepLinking: true },
     });
   },
-  { name: "swagger" },
+  { name: "swagger", dependencies: ["env"] },
 );
