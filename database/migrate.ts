@@ -1,22 +1,54 @@
 import { createConnection } from "mysql2/promise";
 import { readdir, readFile } from "fs/promises";
 import { join, resolve } from "path";
-import { env } from "../src/config/env";
 
 const MIGRATIONS_DIR = resolve(import.meta.dir, "migrations");
+const FRESH = process.argv.includes("--fresh");
+
+const DB_HOST = process.env["DB_HOST"] ?? "localhost";
+const DB_PORT = Number(process.env["DB_PORT"] ?? 3306);
+const DB_USER = process.env["DB_USER"] ?? "root";
+const DB_PASSWORD = process.env["DB_PASSWORD"] ?? "";
+const DB_NAME = process.env["DB_NAME"] ?? "qemail_db";
+
+async function dropAll(conn: Awaited<ReturnType<typeof createConnection>>) {
+  const [tables] = await conn.query<import("mysql2").RowDataPacket[]>(
+    `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'`,
+    [DB_NAME],
+  );
+
+  if (tables.length === 0) {
+    console.log("[migrate:fresh] No tables to drop.");
+    return;
+  }
+
+  await conn.execute("SET FOREIGN_KEY_CHECKS = 0");
+  for (const row of tables) {
+    const name = row["TABLE_NAME"] as string;
+    await conn.execute(`DROP TABLE IF EXISTS \`${name}\``);
+    console.log(`[migrate:fresh]   dropped \`${name}\``);
+  }
+  await conn.execute("SET FOREIGN_KEY_CHECKS = 1");
+  console.log("[migrate:fresh] All tables dropped.");
+}
 
 async function run() {
   const conn = await createConnection({
-    host: env.DB_HOST,
-    port: env.DB_PORT,
-    user: env.DB_USER,
-    password: env.DB_PASSWORD,
-    database: env.DB_NAME,
+    host: DB_HOST,
+    port: DB_PORT,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_NAME,
     multipleStatements: true,
     timezone: "+00:00",
   });
 
-  console.log(`[migrate] Connected to ${env.DB_HOST}:${env.DB_PORT}/${env.DB_NAME}`);
+  console.log(`[migrate] Connected to ${DB_HOST}:${DB_PORT}/${DB_NAME}`);
+
+  if (FRESH) {
+    console.log("[migrate] --fresh flag detected: dropping all tables …");
+    await dropAll(conn);
+  }
 
   await conn.execute(`
     CREATE TABLE IF NOT EXISTS migrations (
@@ -26,10 +58,10 @@ async function run() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
-  const [rows] = await conn.execute<{ name: string }[] & import("mysql2").RowDataPacket[]>(
-    "SELECT name FROM migrations ORDER BY id ASC"
+  const [rows] = await conn.execute<import("mysql2").RowDataPacket[]>(
+    "SELECT name FROM migrations ORDER BY id ASC",
   );
-  const applied = new Set(rows.map((r) => r.name));
+  const applied = new Set(rows.map((r) => r["name"] as string));
 
   const allFiles = (await readdir(MIGRATIONS_DIR))
     .filter((f) => f.endsWith(".sql"))
