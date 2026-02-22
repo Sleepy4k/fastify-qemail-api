@@ -10,7 +10,9 @@
     "start": "bun src/server.ts",
     "build": "bun build src/server.ts --compile --outfile qemail-api",
     "db:migrate": "bun run database/migrate.ts",
+    "db:migrate:fresh": "bun run database/migrate.ts --fresh",
     "db:seed": "bun run database/seed.ts",
+    "db:seed:fresh": "bun run database/seed.ts --fresh",
     "test": "bun test",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\""
@@ -28,6 +30,7 @@
   "dependencies": {
     "@fastify/cookie": "^10.0.1",
     "@fastify/cors": "^10.0.1",
+    "@fastify/env": "^5.0.3",
     "@fastify/helmet": "^12.0.1",
     "@fastify/jwt": "^9.0.1",
     "@fastify/rate-limit": "^10.1.1",
